@@ -1,5 +1,5 @@
 // src/components/CalendarioAuditoria.jsx
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../services/supabase";
 
 export default function CalendarioAuditoria() {
@@ -10,11 +10,7 @@ export default function CalendarioAuditoria() {
   const [cargando, setCargando] = useState(false);
   const [desplegados, setDesplegados] = useState({});
 
-  useEffect(() => {
-    cargarDatosAuditoria();
-  }, [fechaSeleccionada]);
-
-  const cargarDatosAuditoria = async () => {
+  const cargarDatosAuditoria = useCallback(async () => {
     try {
       setCargando(true);
 
@@ -64,7 +60,7 @@ export default function CalendarioAuditoria() {
       // 5. Cargamos tareas urgentes de la fecha seleccionada
       const { data: tareasUrgentesDia, error: errUrg } = await supabase
         .from("tareas_urgentes")
-        .select("*")
+        .select("id, empleado_id, descripcion, completada")
         .eq("fecha", fechaSeleccionada);
 
       if (errUrg) throw errUrg;
@@ -138,7 +134,11 @@ export default function CalendarioAuditoria() {
     } finally {
       setCargando(false);
     }
-  };
+  }, [fechaSeleccionada]);
+
+  useEffect(() => {
+    queueMicrotask(cargarDatosAuditoria);
+  }, [cargarDatosAuditoria]);
 
   const toggleDesplegar = (empleadoId) => {
     setDesplegados((prev) => ({
@@ -179,10 +179,11 @@ export default function CalendarioAuditoria() {
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-600">
+          <label htmlFor="audit-date" className="text-sm font-medium text-gray-600">
             Seleccionar fecha:
           </label>
           <input
+            id="audit-date"
             type="date"
             value={fechaSeleccionada}
             onChange={(e) => setFechaSeleccionada(e.target.value)}
@@ -256,6 +257,7 @@ export default function CalendarioAuditoria() {
                 <div className="pt-2 flex justify-end">
                   <button
                     onClick={() => toggleDesplegar(emp.id)}
+                    aria-expanded={Boolean(estaAbierto)}
                     className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
                   >
                     {estaAbierto
@@ -289,7 +291,7 @@ export default function CalendarioAuditoria() {
                                 key={urg.id}
                                 className={`flex items-center justify-between p-2.5 rounded-lg border text-xs sm:text-sm ${
                                   urg.completada
-                                    ? "bg-green-50/80 border-green-200 text-green-900"
+                                    ? "bg-green-50 border-green-200 text-green-900"
                                     : "bg-white border-amber-300 text-amber-950"
                                 }`}
                               >
@@ -322,7 +324,7 @@ export default function CalendarioAuditoria() {
                                   <button
                                     onClick={() => eliminarTareaUrgente(urg.id)}
                                     className="text-red-400 hover:text-red-600 font-bold p-1 transition-colors"
-                                    title="Eliminar tarea urgente"
+                                    aria-label={`Eliminar tarea urgente: ${urg.descripcion}`}
                                   >
                                     ✕
                                   </button>
@@ -358,7 +360,7 @@ export default function CalendarioAuditoria() {
                                 key={tarea.id}
                                 className={`flex items-center justify-between p-2.5 rounded-lg border text-xs sm:text-sm ${
                                   tarea.completada
-                                    ? "bg-green-50/60 border-green-200 text-green-900"
+                                    ? "bg-green-50 border-green-200 text-green-900"
                                     : "bg-white border-gray-200 text-gray-500"
                                 }`}
                               >

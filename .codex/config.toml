@@ -1,0 +1,3 @@
+[mcp_servers.supabase_barberia]
+url = "https://mcp.supabase.com/mcp?project_ref=ucmwykzrepmjucssjnum&read_only=true&features=database,docs"
+enabled = true

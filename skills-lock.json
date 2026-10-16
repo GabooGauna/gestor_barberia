@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "skills": {
+    "frontend-design": {
+      "source": "GabooGauna/gestor_petshop",
+      "sourceType": "github",
+      "ref": "cf60b80dd8a6eb7a0faad0315d18020e33679607",
+      "skillPath": ".agents/skills/frontend-design/SKILL.md",
+      "license": "Apache-2.0",
+      "adapted": true,
+      "computedHash": "9724770cbdb2ce5d6875567ce953b760278fbcf0ead499ef0e1996fa95d39425"
+    }
+  }
+}

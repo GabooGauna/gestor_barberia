@@ -73,10 +73,11 @@ export default function RegistroEmpleados({ onEmpleadoCreado }) {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">
+          <label htmlFor="employee-name" className="block text-xs font-semibold text-gray-600 uppercase mb-1">
             Nombre del Barbero
           </label>
           <input
+            id="employee-name"
             type="text"
             placeholder="Ej. Carlos Gómez"
             value={nombre}
@@ -86,10 +87,11 @@ export default function RegistroEmpleados({ onEmpleadoCreado }) {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">
+          <label htmlFor="employee-pin" className="block text-xs font-semibold text-gray-600 uppercase mb-1">
             PIN de Acceso (4 dígitos)
           </label>
           <input
+            id="employee-pin"
             type="password"
             maxLength="4"
             placeholder="****"
@@ -100,10 +102,11 @@ export default function RegistroEmpleados({ onEmpleadoCreado }) {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">
+          <label htmlFor="employee-role" className="block text-xs font-semibold text-gray-600 uppercase mb-1">
             Rol en el Sistema
           </label>
           <select
+            id="employee-role"
             value={rol}
             onChange={(e) => setRol(e.target.value)}
             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-sm bg-white"
@@ -115,6 +118,7 @@ export default function RegistroEmpleados({ onEmpleadoCreado }) {
 
         {mensaje.texto && (
           <p
+            role={mensaje.tipo === "error" ? "alert" : "status"}
             className={`text-xs font-medium p-3 rounded-lg ${
               mensaje.tipo === "error"
                 ? "bg-red-50 text-red-600"

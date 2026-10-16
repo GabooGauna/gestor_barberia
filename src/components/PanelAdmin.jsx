@@ -5,6 +5,40 @@ import CalendarioAuditoria from "./CalendarioAuditoria";
 import RegistroEmpleados from "./RegistroEmpleados"; // <-- Importamos nuestro componente modular
 import AsignarRutinas from "./AsignarRutinas";
 import EnviarTareaUrgente from "./EnviarTareaUrgente";
+import {
+  DEFAULT_ROUTINE_COLOR,
+  ROUTINE_COLORS_ENABLED,
+  ROUTINE_COLOR_OPTIONS,
+  normalizeRoutineColor,
+  routineColorClass,
+} from "../utils/coloresRutina";
+
+function RoutineColorPicker({ name, value, onChange, disabled = false }) {
+  return (
+    <fieldset className="routine-color-picker" disabled={disabled}>
+      <legend className="sr-only">Color de identificación</legend>
+      <span aria-hidden="true">Color de identificación</span>
+      <div className="routine-color-options">
+        {ROUTINE_COLOR_OPTIONS.map((option) => (
+          <label
+            key={option.id}
+            className={`routine-color-option routine-accent--${option.id}`}
+          >
+            <input
+              type="radio"
+              name={name}
+              value={option.id}
+              checked={value === option.id}
+              onChange={() => onChange(option.id)}
+            />
+            <span className="routine-color-dot" aria-hidden="true" />
+            <span>{option.label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 
 export default function PanelAdmin() {
   const [vistaActiva, setVistaActiva] = useState("plantillas"); // 'plantillas', 'empleados', o 'auditoria'
@@ -12,25 +46,42 @@ export default function PanelAdmin() {
   // Estados del Creador de Plantillas
   const [rutinas, setRutinas] = useState([]);
   const [nuevoTitulo, setNuevoTitulo] = useState("");
+  const [nuevoColor, setNuevoColor] = useState(DEFAULT_ROUTINE_COLOR);
   const [rutinaSeleccionada, setRutinaSeleccionada] = useState(null);
   const [nuevaSeccion, setNuevaSeccion] = useState("");
   const [nuevaDescripcion, setNuevaDescripcion] = useState("");
-  const [cargando, setCargando] = useState(false);
+  const [cargandoRutinas, setCargandoRutinas] = useState(true);
+  const [cargandoEmpleados, setCargandoEmpleados] = useState(true);
+  const [accionPendiente, setAccionPendiente] = useState("");
+  const [mensajeRutinas, setMensajeRutinas] = useState("");
 
   // Estados para listar y administrar empleados existentes
   const [empleados, setEmpleados] = useState([]);
 
-  useEffect(() => {
-    cargarRutinas();
-    cargarEmpleados();
-  }, []);
+  const secciones = [
+    ["plantillas", "Plantillas", "Protocolos base"],
+    ["empleados", "Equipo", "Perfiles y roles"],
+    ["asignar", "Asignaciones", "Rutinas por persona"],
+    ["urgentes", "Urgencias", "Trabajo extraordinario"],
+    ["auditoria", "Auditoría", "Cumplimiento diario"],
+  ];
 
-  const cargarRutinas = async () => {
+  const cargarRutinas = async ({ mostrarCarga = true } = {}) => {
     try {
-      const { data, error } = await supabase
-        .from("rutinas")
-        .select(
-          `
+      if (mostrarCarga) setCargandoRutinas(true);
+      const selection = ROUTINE_COLORS_ENABLED
+        ? `
+          id,
+          titulo,
+          color,
+          tareas_rutina (
+            id,
+            seccion,
+            descripcion,
+            orden
+          )
+        `
+        : `
           id,
           titulo,
           tareas_rutina (
@@ -39,50 +90,83 @@ export default function PanelAdmin() {
             descripcion,
             orden
           )
-        `,
-        )
+        `;
+      const { data, error } = await supabase
+        .from("rutinas")
+        .select(selection)
         .order("titulo", { ascending: true });
 
       if (error) throw error;
-      setRutinas(data || []);
+      const rutinasNormalizadas = (data || []).map((rutina) => ({
+        ...rutina,
+        color: ROUTINE_COLORS_ENABLED
+          ? normalizeRoutineColor(rutina.color)
+          : DEFAULT_ROUTINE_COLOR,
+      }));
+      setRutinas(rutinasNormalizadas);
+      setRutinaSeleccionada((seleccionada) =>
+        seleccionada
+          ? rutinasNormalizadas.find(({ id }) => id === seleccionada.id) || null
+          : null,
+      );
+      return rutinasNormalizadas;
     } catch (err) {
       console.error("Error al cargar rutinas:", err);
+      setMensajeRutinas("No se pudieron cargar las rutinas. Intenta nuevamente.");
+      return [];
+    } finally {
+      if (mostrarCarga) setCargandoRutinas(false);
     }
   };
 
   const cargarEmpleados = async () => {
     try {
+      setCargandoEmpleados(true);
       const { data, error } = await supabase
         .from("empleados")
-        .select("*")
+        .select("id, nombre, rol")
         .order("nombre", { ascending: true });
 
       if (error) throw error;
       setEmpleados(data || []);
     } catch (err) {
       console.error("Error al cargar empleados:", err);
+    } finally {
+      setCargandoEmpleados(false);
     }
   };
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      cargarRutinas();
+      cargarEmpleados();
+    });
+  }, []);
 
   const crearRutina = async (e) => {
     e.preventDefault();
     if (!nuevoTitulo.trim()) return;
 
     try {
-      setCargando(true);
+      setAccionPendiente("crear-rutina");
+      setMensajeRutinas("");
+      const nuevaRutina = { titulo: nuevoTitulo.trim() };
+      if (ROUTINE_COLORS_ENABLED) nuevaRutina.color = nuevoColor;
       const { error } = await supabase
         .from("rutinas")
-        .insert([{ titulo: nuevoTitulo }]);
+        .insert([nuevaRutina]);
 
       if (error) throw error;
 
       setNuevoTitulo("");
-      cargarRutinas();
+      setNuevoColor(DEFAULT_ROUTINE_COLOR);
+      setMensajeRutinas("Rutina creada.");
+      await cargarRutinas({ mostrarCarga: false });
     } catch (err) {
       console.error("Error al crear rutina:", err);
       alert("No se pudo crear la rutina.");
     } finally {
-      setCargando(false);
+      setAccionPendiente("");
     }
   };
 
@@ -107,7 +191,7 @@ export default function PanelAdmin() {
         setRutinaSeleccionada(null);
       }
 
-      cargarRutinas();
+      await cargarRutinas({ mostrarCarga: false });
     } catch (err) {
       console.error("Error al eliminar la rutina:", err);
       alert("No se pudo eliminar la rutina.");
@@ -120,7 +204,7 @@ export default function PanelAdmin() {
       return;
 
     try {
-      setCargando(true);
+      setAccionPendiente("agregar-tarea");
       const ordenSiguiente = rutinaSeleccionada.tareas_rutina.length + 1;
 
       const { error } = await supabase.from("tareas_rutina").insert([
@@ -137,20 +221,15 @@ export default function PanelAdmin() {
       setNuevaSeccion("");
       setNuevaDescripcion("");
 
-      await cargarRutinas();
-
-      const { data: rutinaActualizada } = await supabase
-        .from("rutinas")
-        .select(`id, titulo, tareas_rutina (id, seccion, descripcion, orden)`)
-        .eq("id", rutinaSeleccionada.id)
-        .single();
-
-      setRutinaSeleccionada(rutinaActualizada);
+      const rutinasActualizadas = await cargarRutinas({ mostrarCarga: false });
+      setRutinaSeleccionada(
+        rutinasActualizadas.find(({ id }) => id === rutinaSeleccionada.id) || null,
+      );
     } catch (err) {
       console.error("Error al agregar tarea:", err);
       alert("No se pudo agregar la tarea.");
     } finally {
-      setCargando(false);
+      setAccionPendiente("");
     }
   };
 
@@ -165,18 +244,39 @@ export default function PanelAdmin() {
 
       if (error) throw error;
 
-      await cargarRutinas();
-
-      const { data: rutinaActualizada } = await supabase
-        .from("rutinas")
-        .select(`id, titulo, tareas_rutina (id, seccion, descripcion, orden)`)
-        .eq("id", rutinaSeleccionada.id)
-        .single();
-
-      setRutinaSeleccionada(rutinaActualizada);
+      const rutinasActualizadas = await cargarRutinas({ mostrarCarga: false });
+      setRutinaSeleccionada(
+        rutinasActualizadas.find(({ id }) => id === rutinaSeleccionada.id) || null,
+      );
     } catch (err) {
       console.error("Error al eliminar la tarea:", err);
       alert("No se pudo eliminar la tarea.");
+    }
+  };
+
+  const actualizarColorRutina = async (color) => {
+    if (!ROUTINE_COLORS_ENABLED || !rutinaSeleccionada) return;
+
+    const colorNormalizado = normalizeRoutineColor(color);
+    try {
+      setAccionPendiente("actualizar-color");
+      setMensajeRutinas("");
+      const { error } = await supabase
+        .from("rutinas")
+        .update({ color: colorNormalizado })
+        .eq("id", rutinaSeleccionada.id);
+
+      if (error) throw error;
+      const rutinasActualizadas = await cargarRutinas({ mostrarCarga: false });
+      setRutinaSeleccionada(
+        rutinasActualizadas.find(({ id }) => id === rutinaSeleccionada.id) || null,
+      );
+      setMensajeRutinas("Color de rutina actualizado.");
+    } catch (err) {
+      console.error("Error al actualizar el color de la rutina:", err);
+      setMensajeRutinas("No se pudo actualizar el color de la rutina.");
+    } finally {
+      setAccionPendiente("");
     }
   };
 
@@ -199,60 +299,24 @@ export default function PanelAdmin() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="admin-layout">
       {/* Barra de Navegación Superior de 5 Solapas */}
-      <div className="flex flex-wrap bg-white p-1.5 rounded-xl shadow max-w-4xl mx-auto gap-1">
-        <button
-          onClick={() => setVistaActiva("plantillas")}
-          className={`flex-1 min-w-[110px] py-2.5 px-3 text-sm font-semibold rounded-lg transition-all ${
-            vistaActiva === "plantillas"
-              ? "bg-blue-600 text-white shadow"
-              : "text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Plantillas
-        </button>
-        <button
-          onClick={() => setVistaActiva("empleados")}
-          className={`flex-1 min-w-[110px] py-2.5 px-3 text-sm font-semibold rounded-lg transition-all ${
-            vistaActiva === "empleados"
-              ? "bg-blue-600 text-white shadow"
-              : "text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Empleados
-        </button>
-        <button
-          onClick={() => setVistaActiva("asignar")}
-          className={`flex-1 min-w-[110px] py-2.5 px-3 text-sm font-semibold rounded-lg transition-all ${
-            vistaActiva === "asignar"
-              ? "bg-blue-600 text-white shadow"
-              : "text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Asignar Tareas
-        </button>
-        <button
-          onClick={() => setVistaActiva("urgentes")}
-          className={`flex-1 min-w-[110px] py-2.5 px-3 text-sm font-semibold rounded-lg transition-all ${
-            vistaActiva === "urgentes"
-              ? "bg-amber-600 text-white shadow"
-              : "text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          🚨 Urgencias
-        </button>
-        <button
-          onClick={() => setVistaActiva("auditoria")}
-          className={`flex-1 min-w-[110px] py-2.5 px-3 text-sm font-semibold rounded-lg transition-all ${
-            vistaActiva === "auditoria"
-              ? "bg-blue-600 text-white shadow"
-              : "text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Auditoría
-        </button>
-      </div>
+      <nav className="section-nav" aria-label="Secciones de administración">
+        {secciones.map(([id, title, detail]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setVistaActiva(id)}
+            aria-current={vistaActiva === id ? "page" : undefined}
+            className="section-nav__item"
+          >
+            <span>{title}</span>
+            <small>{detail}</small>
+          </button>
+        ))}
+      </nav>
+
+      <div className="admin-content">
 
       {/* VISTA 1: Creador de Plantillas */}
       {vistaActiva === "plantillas" && (
@@ -261,49 +325,88 @@ export default function PanelAdmin() {
             <h2 className="text-xl font-bold text-gray-800 mb-4">
               Creador de Plantillas (SOP)
             </h2>
-            <form onSubmit={crearRutina} className="flex gap-4">
-              <input
-                type="text"
-                placeholder="Nombre de la nueva rutina (Ej. Control Sanitario)"
-                value={nuevoTitulo}
-                onChange={(e) => setNuevoTitulo(e.target.value)}
-                className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-              />
-              <button
-                type="submit"
-                disabled={cargando}
-                className="bg-blue-600 text-white font-medium px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                Crear Rutina
-              </button>
+            <form onSubmit={crearRutina} className="grid gap-4">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1">
+                  <label htmlFor="routine-title" className="text-sm font-medium text-gray-600 block mb-1">
+                    Nombre de la rutina
+                  </label>
+                  <input
+                    id="routine-title"
+                    type="text"
+                    placeholder="Ej. Control sanitario"
+                    value={nuevoTitulo}
+                    onChange={(e) => setNuevoTitulo(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={accionPendiente === "crear-rutina" || !nuevoTitulo.trim()}
+                  className="button button--primary self-end px-6"
+                >
+                  {accionPendiente === "crear-rutina" ? "Creando rutina…" : "Crear rutina"}
+                </button>
+              </div>
+              {ROUTINE_COLORS_ENABLED && (
+                <RoutineColorPicker
+                  name="new-routine-color"
+                  value={nuevoColor}
+                  onChange={setNuevoColor}
+                  disabled={accionPendiente === "crear-rutina"}
+                />
+              )}
             </form>
+            {mensajeRutinas && (
+              <p className="mt-3 text-sm text-gray-600" role="status">
+                {mensajeRutinas}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-xl shadow">
               <h3 className="text-lg font-bold text-gray-800 mb-4">
-                Rutinas Registradas
+                Rutinas registradas
               </h3>
               <div className="space-y-2">
-                {rutinas.map((rutina) => (
+                {cargandoRutinas && (
+                  <div className="loading-state py-4" role="status" aria-live="polite">
+                    <span className="loading-dot" aria-hidden="true" />
+                    Cargando rutinas…
+                  </div>
+                )}
+                {!cargandoRutinas && rutinas.length === 0 && (
+                  <p className="text-sm text-gray-500 py-4">
+                    Todavía no hay rutinas. Crea la primera para comenzar.
+                  </p>
+                )}
+                {!cargandoRutinas && rutinas.map((rutina) => (
                   <div
                     key={rutina.id}
-                    onClick={() => setRutinaSeleccionada(rutina)}
-                    className={`p-4 rounded-lg border cursor-pointer transition-all flex justify-between items-center ${
+                    className={`${routineColorClass(rutina.color)} rounded-lg border transition-all flex justify-between items-center ${
                       rutinaSeleccionada?.id === rutina.id
                         ? "bg-blue-50 border-blue-500 text-blue-900 font-semibold"
                         : "bg-gray-50 border-gray-200 hover:border-gray-300 text-gray-700"
                     }`}
                   >
-                    <span>{rutina.titulo}</span>
+                    <button
+                      type="button"
+                      onClick={() => setRutinaSeleccionada(rutina)}
+                      aria-pressed={rutinaSeleccionada?.id === rutina.id}
+                      className="flex-1 p-4 text-left"
+                    >
+                      <span className={`routine-color-dot routine-accent--${normalizeRoutineColor(rutina.color)}`} aria-hidden="true" />
+                      <span className="ml-2">{rutina.titulo}</span>
+                    </button>
                     <div className="flex items-center gap-3">
                       <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
                         {rutina.tareas_rutina?.length || 0} tareas
                       </span>
                       <button
                         onClick={(e) => eliminarRutina(rutina.id, e)}
-                        className="text-red-400 hover:text-red-600 font-bold p-1 transition-colors"
-                        title="Eliminar rutina"
+                        className="text-red-400 hover:text-red-600 font-bold p-3 transition-colors"
+                        aria-label={`Eliminar rutina ${rutina.titulo}`}
                       >
                         ✕
                       </button>
@@ -323,30 +426,54 @@ export default function PanelAdmin() {
                     Agrega o elimina pasos de este protocolo.
                   </p>
 
+                  {ROUTINE_COLORS_ENABLED && (
+                    <div className="mb-5 p-4 bg-gray-50 rounded-lg border">
+                      <RoutineColorPicker
+                        name={`routine-color-${rutinaSeleccionada.id}`}
+                        value={normalizeRoutineColor(rutinaSeleccionada.color)}
+                        onChange={actualizarColorRutina}
+                        disabled={accionPendiente === "actualizar-color"}
+                      />
+                      <p className="mt-2 text-xs text-gray-500" aria-live="polite">
+                        {accionPendiente === "actualizar-color"
+                          ? "Guardando color…"
+                          : "El cobre es el color predeterminado."}
+                      </p>
+                    </div>
+                  )}
+
                   <form
                     onSubmit={agregarTarea}
                     className="space-y-3 mb-6 bg-gray-50 p-4 rounded-lg border"
                   >
-                    <input
-                      type="text"
-                      placeholder="Sección (Ej. Limpieza, Recepción)"
-                      value={nuevaSeccion}
-                      onChange={(e) => setNuevaSeccion(e.target.value)}
-                      className="w-full p-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-500 bg-white"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Descripción de la tarea"
-                      value={nuevaDescripcion}
-                      onChange={(e) => setNuevaDescripcion(e.target.value)}
-                      className="w-full p-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-500 bg-white"
-                    />
+                    <div>
+                      <label htmlFor="task-section" className="text-xs font-medium text-gray-600 block mb-1">Sección</label>
+                      <input
+                        id="task-section"
+                        type="text"
+                        placeholder="Ej. Limpieza o recepción"
+                        value={nuevaSeccion}
+                        onChange={(e) => setNuevaSeccion(e.target.value)}
+                        className="w-full p-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-500 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="task-description" className="text-xs font-medium text-gray-600 block mb-1">Descripción de la tarea</label>
+                      <input
+                        id="task-description"
+                        type="text"
+                        placeholder="Describe el paso a realizar"
+                        value={nuevaDescripcion}
+                        onChange={(e) => setNuevaDescripcion(e.target.value)}
+                        className="w-full p-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-500 bg-white"
+                      />
+                    </div>
                     <button
                       type="submit"
-                      disabled={cargando}
+                      disabled={accionPendiente === "agregar-tarea" || !nuevaSeccion.trim() || !nuevaDescripcion.trim()}
                       className="w-full bg-gray-800 text-white text-sm font-medium py-2 rounded hover:bg-gray-900 transition-colors"
                     >
-                      + Agregar Tarea
+                      {accionPendiente === "agregar-tarea" ? "Agregando tarea…" : "+ Agregar tarea"}
                     </button>
                   </form>
 
@@ -356,7 +483,7 @@ export default function PanelAdmin() {
                     </h4>
                     {rutinaSeleccionada.tareas_rutina &&
                     rutinaSeleccionada.tareas_rutina.length > 0 ? (
-                      rutinaSeleccionada.tareas_rutina
+                      [...rutinaSeleccionada.tareas_rutina]
                         .sort((a, b) => a.orden - b.orden)
                         .map((t) => (
                           <div
@@ -375,6 +502,7 @@ export default function PanelAdmin() {
                               onClick={() => eliminarTarea(t.id)}
                               className="text-red-400 hover:text-red-600 font-bold p-1 transition-colors"
                               title="Eliminar tarea"
+                              aria-label={`Eliminar tarea: ${t.descripcion}`}
                             >
                               ✕
                             </button>
@@ -409,14 +537,23 @@ export default function PanelAdmin() {
           {/* Columna Derecha: Lista de Empleados Actuales */}
           <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
             <h3 className="text-lg font-bold text-gray-800 mb-1">
-              Personal Registrado
+              Personal registrado
             </h3>
             <p className="text-xs text-gray-500 mb-4">
               Listado actual del equipo de trabajo y sus roles.
             </p>
 
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {empleados.map((emp) => (
+              {cargandoEmpleados && (
+                <div className="loading-state py-4" role="status" aria-live="polite">
+                  <span className="loading-dot" aria-hidden="true" />
+                  Cargando equipo…
+                </div>
+              )}
+              {!cargandoEmpleados && empleados.length === 0 && (
+                <p className="text-sm text-gray-500 py-4">Todavía no hay integrantes registrados.</p>
+              )}
+              {!cargandoEmpleados && empleados.map((emp) => (
                 <div
                   key={emp.id}
                   className="p-4 bg-gray-50 border rounded-xl flex justify-between items-center"
@@ -434,6 +571,7 @@ export default function PanelAdmin() {
                       onClick={() => eliminarEmpleado(emp.id)}
                       className="text-red-400 hover:text-red-600 font-bold text-sm px-2 py-1 transition-colors"
                       title="Eliminar empleado"
+                      aria-label={`Eliminar empleado: ${emp.nombre}`}
                     >
                       ✕ Eliminar
                     </button>
@@ -457,6 +595,7 @@ export default function PanelAdmin() {
           <EnviarTareaUrgente />
         </div>
       )}
+      </div>
     </div>
   );
 }

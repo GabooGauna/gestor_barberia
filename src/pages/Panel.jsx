@@ -2,6 +2,8 @@
 import { useNavigate } from "react-router-dom";
 import PanelAdmin from "../components/PanelAdmin";
 import PanelEmpleado from "../components/PanelEmpleado";
+import BrandLogo from "../components/BrandLogo";
+import UserActionsMenu from "../components/UserActionsMenu";
 
 export default function Panel() {
   const navigate = useNavigate();
@@ -13,28 +15,31 @@ export default function Panel() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="app-shell">
+      <div className="mobile-topbar" aria-label="Cabecera móvil">
+        <BrandLogo className="brand-logo--mobile" />
+        <UserActionsMenu usuario={usuario} onLogout={cerrarSesion} mobile />
+      </div>
+      <aside className="app-rail" aria-label="Contexto de la aplicación">
+        <BrandLogo className="brand-logo--rail" />
+        <div className="rail-guide" aria-hidden="true" />
+      </aside>
+      <div className="app-workspace">
         {/* Cabecera común para ambos roles */}
-        <header className="flex justify-between items-center bg-white p-4 rounded-xl shadow mb-6">
+        <header className="workspace-header">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-gray-800">
-              SOP Barbería
+            <p className="context-label">Jornada en curso</p>
+            <h1>
+              Mesa de trabajo
             </h1>
-            <p className="text-sm text-gray-500 capitalize">
-              {usuario?.nombre} ({usuario?.rol})
-            </p>
           </div>
-          <button
-            onClick={cerrarSesion}
-            className="bg-red-50 text-red-600 px-4 py-2 rounded-lg hover:bg-red-100 transition-colors font-medium"
-          >
-            Salir
-          </button>
+          <UserActionsMenu usuario={usuario} onLogout={cerrarSesion} />
         </header>
 
         {/* Renderizado condicional: Si el rol es admin, muestra PanelAdmin. Si no, PanelEmpleado */}
-        {usuario?.rol === "admin" ? <PanelAdmin /> : <PanelEmpleado />}
+        <main className="workspace-main">
+          {usuario?.rol === "admin" ? <PanelAdmin /> : <PanelEmpleado />}
+        </main>
       </div>
     </div>
   );

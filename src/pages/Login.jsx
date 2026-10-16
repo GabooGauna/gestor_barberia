@@ -1,7 +1,9 @@
 // src/pages/Login.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../services/supabase";
+import ThemeSelector from "../components/ThemeSelector";
+import BrandLogo from "../components/BrandLogo";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -10,11 +12,10 @@ export default function Login() {
   const [pin, setPin] = useState("");
   const [errorMensaje, setErrorMensaje] = useState("");
   const [cargando, setCargando] = useState(true);
-
-  // Al cargar la página, traemos la lista de empleados desde Supabase
-  useEffect(() => {
-    cargarEmpleados();
-  }, []);
+  const pinInputRef = useRef(null);
+  const profileButtonRefs = useRef(new Map());
+  const lastProfileIdRef = useRef(null);
+  const restoreProfileFocusRef = useRef(false);
 
   const cargarEmpleados = async () => {
     try {
@@ -33,6 +34,29 @@ export default function Login() {
       setCargando(false);
     }
   };
+
+  // Al cargar la página, traemos la lista de empleados desde Supabase
+  useEffect(() => {
+    queueMicrotask(cargarEmpleados);
+  }, []);
+
+  useEffect(() => {
+    const focusFrame = window.requestAnimationFrame(() => {
+      if (empleadoSeleccionado) {
+        pinInputRef.current?.focus({ preventScroll: true });
+        return;
+      }
+
+      if (restoreProfileFocusRef.current && lastProfileIdRef.current) {
+        profileButtonRefs.current
+          .get(lastProfileIdRef.current)
+          ?.focus({ preventScroll: true });
+        restoreProfileFocusRef.current = false;
+      }
+    });
+
+    return () => window.cancelAnimationFrame(focusFrame);
+  }, [empleadoSeleccionado]);
 
   // Función al enviar el PIN para verificar
   const handleLogin = async (e) => {
@@ -73,22 +97,26 @@ export default function Login() {
 
   if (cargando) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-gray-500 font-medium">Cargando sistema...</p>
+      <div className="login-stage" aria-live="polite" aria-busy="true">
+        <div className="loading-state"><span className="loading-dot" />Preparando la mesa de trabajo…</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">
-            Gestor de Barbería
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Selecciona tu perfil para ingresar
-          </p>
+    <main className="login-stage">
+      <div className="login-frame">
+        <section className="login-intro" aria-labelledby="login-title">
+          <BrandLogo className="brand-logo--login" />
+          <p className="context-label">Operación diaria</p>
+          <h1 id="login-title">La jornada, en orden.</h1>
+          <p>Rutinas, responsables y avances en un solo lugar de trabajo.</p>
+          <ThemeSelector />
+        </section>
+        <section className="login-panel" aria-labelledby="access-title">
+        <div className="mb-6">
+          <h2 id="access-title" className="text-2xl font-bold text-gray-800">Ingresar</h2>
+          <p className="text-sm text-gray-500 mt-1">Selecciona tu perfil para continuar.</p>
         </div>
 
         {/* PASO 1: Selector de Empleados */}
@@ -98,11 +126,16 @@ export default function Login() {
               {empleados.map((emp) => (
                 <button
                   key={emp.id}
+                  ref={(node) => {
+                    if (node) profileButtonRefs.current.set(emp.id, node);
+                    else profileButtonRefs.current.delete(emp.id);
+                  }}
                   onClick={() => {
+                    lastProfileIdRef.current = emp.id;
                     setEmpleadoSeleccionado(emp);
                     setErrorMensaje("");
                   }}
-                  className="w-full text-left p-4 rounded-xl border-2 border-gray-100 bg-gray-50 hover:bg-blue-50 hover:border-blue-300 transition-all flex justify-between items-center group"
+                  className="person-row group"
                 >
                   <span className="font-semibold text-gray-800 group-hover:text-blue-900 capitalize">
                     {emp.nombre}
@@ -113,9 +146,17 @@ export default function Login() {
                 </button>
               ))}
             </div>
-            {empleados.length === 0 && (
-              <p className="text-center text-sm text-gray-400 py-4">
+            {empleados.length === 0 && !errorMensaje && (
+              <p className="text-center text-sm text-gray-600 py-4">
                 No hay empleados registrados en la base de datos.
+              </p>
+            )}
+            {errorMensaje && (
+              <p
+                role="alert"
+                className="text-red-600 text-sm font-medium text-center"
+              >
+                {errorMensaje}
               </p>
             )}
           </div>
@@ -134,6 +175,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => {
+                  restoreProfileFocusRef.current = true;
                   setEmpleadoSeleccionado(null);
                   setPin("");
                   setErrorMensaje("");
@@ -145,14 +187,18 @@ export default function Login() {
             </div>
 
             <div className="space-y-2 text-center">
-              <label className="text-sm font-medium text-gray-600 block">
+              <label
+                htmlFor="pin-acceso"
+                className="text-sm font-medium text-gray-600 block"
+              >
                 Ingresa tu PIN de 4 dígitos
               </label>
               <input
+                id="pin-acceso"
+                ref={pinInputRef}
                 type="password"
                 maxLength="4"
                 placeholder="****"
-                autoFocus
                 value={pin}
                 onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
                 className="w-full text-center text-4xl tracking-[0.75em] pl-[0.75em] p-4 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors caret-transparent"
@@ -160,20 +206,25 @@ export default function Login() {
             </div>
 
             {errorMensaje && (
-              <p className="text-red-500 text-sm font-medium text-center">
+              <p
+                role="alert"
+                className="text-red-600 text-sm font-medium text-center"
+              >
                 {errorMensaje}
               </p>
             )}
 
             <button
               type="submit"
-              className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20"
+              disabled={pin.length !== 4}
+              className="button button--primary w-full"
             >
               Confirmar e Ingresar
             </button>
           </form>
         )}
+        </section>
       </div>
-    </div>
+    </main>
   );
 }

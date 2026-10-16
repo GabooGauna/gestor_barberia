@@ -1,51 +1,66 @@
 // src/components/PanelEmpleado.jsx
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../services/supabase";
 import { obtenerColorSeccion } from "../utils/coloresSeccion";
+import {
+  DEFAULT_ROUTINE_COLOR,
+  ROUTINE_COLORS_ENABLED,
+  normalizeRoutineColor,
+  routineColorClass,
+} from "../utils/coloresRutina";
 
 export default function PanelEmpleado() {
   const [rutinasAsignadas, setRutinasAsignadas] = useState([]);
   const [tareasUrgentes, setTareasUrgentes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [completadasHoy, setCompletadasHoy] = useState({});
+  const [errorMensaje, setErrorMensaje] = useState("");
 
-  const usuario = JSON.parse(localStorage.getItem("usuarioBarberia"));
+  const [usuario] = useState(() =>
+    JSON.parse(localStorage.getItem("usuarioBarberia")),
+  );
+  const usuarioId = usuario?.id;
 
-  useEffect(() => {
-    if (usuario?.id) {
-      cargarDatosAsignados();
-    }
-  }, []);
-
-  const cargarDatosAsignados = async () => {
+  const cargarDatosAsignados = useCallback(async () => {
     try {
       setCargando(true);
+      setErrorMensaje("");
       const hoy = new Date().toISOString().split("T")[0];
 
       // 1. Buscamos rutinas asignadas
       const { data: asignaciones, error: errAsig } = await supabase
         .from("empleado_rutinas")
         .select("rutina_id")
-        .eq("empleado_id", usuario.id);
+        .eq("empleado_id", usuarioId);
 
       if (errAsig) throw errAsig;
       const idsRutinas = asignaciones?.map((a) => a.rutina_id) || [];
 
       if (idsRutinas.length > 0) {
+        const selection = ROUTINE_COLORS_ENABLED
+          ? "id, titulo, color, tareas_rutina (id, seccion, descripcion, orden)"
+          : "id, titulo, tareas_rutina (id, seccion, descripcion, orden)";
         const { data: datosRutinas, error: errRutinas } = await supabase
           .from("rutinas")
-          .select(`id, titulo, tareas_rutina (id, seccion, descripcion, orden)`)
+          .select(selection)
           .in("id", idsRutinas);
 
         if (errRutinas) throw errRutinas;
-        setRutinasAsignadas(datosRutinas || []);
+        setRutinasAsignadas((datosRutinas || []).map((rutina) => ({
+          ...rutina,
+          color: ROUTINE_COLORS_ENABLED
+            ? normalizeRoutineColor(rutina.color)
+            : DEFAULT_ROUTINE_COLOR,
+        })));
+      } else {
+        setRutinasAsignadas([]);
       }
 
       // 2. Buscamos tareas urgentes enviadas para hoy
       const { data: datosUrgentes, error: errUrg } = await supabase
         .from("tareas_urgentes")
-        .select("*")
-        .eq("empleado_id", usuario.id)
+        .select("id, descripcion, completada")
+        .eq("empleado_id", usuarioId)
         .eq("fecha", hoy);
 
       if (errUrg) throw errUrg;
@@ -55,7 +70,7 @@ export default function PanelEmpleado() {
       const { data: datosAuditoria, error: errAuditoria } = await supabase
         .from("auditoria_diaria")
         .select("tarea_id")
-        .eq("empleado_id", usuario?.id)
+        .eq("empleado_id", usuarioId)
         .eq("fecha", hoy);
 
       if (errAuditoria) throw errAuditoria;
@@ -73,10 +88,17 @@ export default function PanelEmpleado() {
       setCompletadasHoy(mapaCompletadas);
     } catch (err) {
       console.error("Error cargando protocolos:", err);
+      setErrorMensaje("No se pudieron cargar tus tareas. Intenta nuevamente.");
     } finally {
       setCargando(false);
     }
-  };
+  }, [usuarioId]);
+
+  useEffect(() => {
+    if (usuarioId) {
+      queueMicrotask(cargarDatosAsignados);
+    }
+  }, [cargarDatosAsignados, usuarioId]);
 
   const toggleTarea = async (tareaId, esUrgente = false) => {
     const hoy = new Date().toISOString().split("T")[0];
@@ -126,8 +148,20 @@ export default function PanelEmpleado() {
 
   if (cargando) {
     return (
-      <div className="text-center py-10 text-gray-500">
-        Cargando tus tareas...
+      <div className="loading-state justify-center py-10" role="status" aria-live="polite">
+        <span className="loading-dot" aria-hidden="true" />
+        Cargando tus tareas…
+      </div>
+    );
+  }
+
+  if (errorMensaje) {
+    return (
+      <div className="bg-red-50 border p-6 rounded-xl text-red-600" role="alert">
+        <p className="font-semibold">{errorMensaje}</p>
+        <button type="button" className="button mt-4 border" onClick={cargarDatosAsignados}>
+          Reintentar
+        </button>
       </div>
     );
   }
@@ -157,10 +191,12 @@ export default function PanelEmpleado() {
             {tareasUrgentes.map((urg) => {
               const estaLista = completadasHoy[urg.id];
               return (
-                <div
+                <button
+                  type="button"
                   key={urg.id}
                   onClick={() => toggleTarea(urg.id, true)}
-                  className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  aria-pressed={Boolean(estaLista)}
+                  className={`w-full text-left flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
                     estaLista
                       ? "bg-green-50 border-green-300 text-green-900"
                       : "bg-white border-amber-300 hover:border-amber-400 text-amber-950 shadow-sm"
@@ -186,7 +222,7 @@ export default function PanelEmpleado() {
                   >
                     {estaLista && <span className="font-bold text-sm">✓</span>}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -202,10 +238,14 @@ export default function PanelEmpleado() {
         rutinasAsignadas.map((rutina) => (
           <div
             key={rutina.id}
-            className="bg-white rounded-xl shadow overflow-hidden"
+            className={`${routineColorClass(rutina.color)} bg-white rounded-xl shadow overflow-hidden`}
           >
-            <div className="bg-gray-800 text-white px-6 py-3 font-semibold text-lg">
-              {rutina.titulo}
+            <div className="bg-gray-800 text-white px-6 py-3 font-semibold text-lg flex items-center gap-3">
+              <span
+                className={`routine-color-dot routine-accent--${normalizeRoutineColor(rutina.color)}`}
+                aria-hidden="true"
+              />
+              <span>{rutina.titulo}</span>
             </div>
 
             <div className="p-6 space-y-4">
@@ -218,10 +258,12 @@ export default function PanelEmpleado() {
                     const estiloSeccion = obtenerColorSeccion(tarea.seccion);
 
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={tarea.id}
                         onClick={() => toggleTarea(tarea.id, false)}
-                        className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        aria-pressed={Boolean(estaLista)}
+                        className={`w-full text-left flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
                           estaLista
                             ? "bg-green-50 border-green-300 text-green-900"
                             : `${estiloSeccion.bg} hover:shadow-sm`
@@ -255,7 +297,7 @@ export default function PanelEmpleado() {
                             <span className="font-bold text-sm">✓</span>
                           )}
                         </div>
-                      </div>
+                      </button>
                     );
                   })
               ) : (

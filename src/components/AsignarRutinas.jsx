@@ -10,20 +10,6 @@ export default function AsignarRutinas() {
   const [cargando, setCargando] = useState(false);
   const [mensaje, setMensaje] = useState("");
 
-  // 1. Cargamos la lista de empleados y las rutinas generales al montar el componente
-  useEffect(() => {
-    cargarDatosIniciales();
-  }, []);
-
-  // 2. Cada vez que el administrador cambia de empleado, buscamos qué rutinas tiene asignadas
-  useEffect(() => {
-    if (empleadoSeleccionado) {
-      cargarRutinasDelEmpleado(empleadoSeleccionado.id);
-    } else {
-      setRutinasAsignadasIds([]);
-    }
-  }, [empleadoSeleccionado]);
-
   const cargarDatosIniciales = async () => {
     try {
       setCargando(true);
@@ -67,6 +53,20 @@ export default function AsignarRutinas() {
       console.error("Error al cargar rutinas del empleado:", err);
     }
   };
+
+  // 1. Cargamos la lista de empleados y las rutinas generales al montar el componente
+  useEffect(() => {
+    queueMicrotask(cargarDatosIniciales);
+  }, []);
+
+  // 2. Cada vez que el administrador cambia de empleado, buscamos qué rutinas tiene asignadas
+  useEffect(() => {
+    if (empleadoSeleccionado) {
+      queueMicrotask(() =>
+        cargarRutinasDelEmpleado(empleadoSeleccionado.id),
+      );
+    }
+  }, [empleadoSeleccionado]);
 
   // Función al marcar o desmarcar una casilla (Checkbox)
   const toggleAsignacionRutina = async (rutinaId) => {
@@ -175,10 +175,12 @@ export default function AsignarRutinas() {
             {rutinasTotales.map((rutina) => {
               const asignada = rutinasAsignadasIds.includes(rutina.id);
               return (
-                <div
+                <button
+                  type="button"
                   key={rutina.id}
                   onClick={() => toggleAsignacionRutina(rutina.id)}
-                  className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  aria-pressed={asignada}
+                  className={`w-full text-left flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
                     asignada
                       ? "bg-blue-50 border-blue-400 text-blue-900 font-medium"
                       : "bg-white border-gray-200 hover:border-gray-300 text-gray-600"
@@ -194,7 +196,7 @@ export default function AsignarRutinas() {
                   >
                     {asignada && <span className="text-xs font-bold">✓</span>}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

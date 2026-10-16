@@ -1,10 +1,32 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href="/src/assets/branding/gns-hairstudio-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>gestor-barberia</title>
+    <meta name="theme-color" content="#111417" />
+    <title>Gestor GNS Barberia</title>
+    <script>
+      (() => {
+        let savedTheme;
+        try {
+          savedTheme = localStorage.getItem("gestor-tema");
+        } catch {
+          savedTheme = null;
+        }
+        const preference = ["light", "dark", "system"].includes(savedTheme)
+          ? savedTheme
+          : "system";
+        const resolved = preference === "system"
+          ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+          : preference;
+        document.documentElement.dataset.theme = resolved;
+        document.documentElement.dataset.themePreference = preference;
+        document.documentElement.style.colorScheme = resolved;
+        document.querySelector('meta[name="theme-color"]')
+          .setAttribute("content", resolved === "dark" ? "#111417" : "#253340");
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
