@@ -19,6 +19,7 @@ function MenuIcon({ mobile }) {
 
 export default function UserActionsMenu({ usuario, onLogout, mobile = false }) {
   const [open, setOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
   const menuId = useId();
@@ -89,12 +90,16 @@ export default function UserActionsMenu({ usuario, onLogout, mobile = false }) {
           <button
             type="button"
             className="user-menu__logout"
-            onClick={onLogout}
+            disabled={loggingOut}
+            onClick={async () => {
+              setLoggingOut(true);
+              try { await onLogout(); } finally { setLoggingOut(false); }
+            }}
           >
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10" />
             </svg>
-            Cerrar sesión
+            {loggingOut ? "Cerrando sesión…" : "Cerrar sesión"}
           </button>
         </div>
       )}

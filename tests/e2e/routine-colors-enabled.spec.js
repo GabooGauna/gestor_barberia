@@ -1,14 +1,14 @@
 import {
   expect,
-  seedLegacySession,
+  seedAuthSession,
   test,
 } from "./fixtures/supabase-mock";
 
-const admin = { id: "admin-1", nombre: "Administración", rol: "admin" };
-const employee = { id: "employee-1", nombre: "Ana", rol: "empleado" };
+const admin = { id: "10000000-0000-4000-8000-000000000001", auth_user_id: "20000000-0000-4000-8000-000000000001", nombre: "Administración", usuario: "admin.gns", rol: "admin", activo: true };
+const employee = { id: "10000000-0000-4000-8000-000000000002", auth_user_id: "20000000-0000-4000-8000-000000000002", nombre: "Ana", usuario: "ana", rol: "empleado", activo: true };
 
 async function seedColorEnvironment(page, supabaseMock, user = admin) {
-  await seedLegacySession(page, user);
+  await seedAuthSession(page, supabaseMock, user);
   supabaseMock.setTable("empleados", [admin, employee]);
   supabaseMock.setTable("rutinas", [
     {

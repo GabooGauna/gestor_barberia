@@ -1,10 +1,11 @@
 // src/components/CalendarioAuditoria.jsx
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../services/supabase";
+import { currentBusinessDate } from "../utils/businessDate";
 
 export default function CalendarioAuditoria() {
   const [fechaSeleccionada, setFechaSeleccionada] = useState(
-    new Date().toISOString().split("T")[0],
+    currentBusinessDate(),
   );
   const [datosAuditoriaEmpleados, setDatosAuditoriaEmpleados] = useState([]);
   const [cargando, setCargando] = useState(false);
@@ -53,7 +54,8 @@ export default function CalendarioAuditoria() {
       const { data: auditoriaDia, error: errAud } = await supabase
         .from("auditoria_diaria")
         .select("tarea_id, empleado_id")
-        .eq("fecha", fechaSeleccionada);
+        .eq("fecha", fechaSeleccionada)
+        .is("anulada_en", null);
 
       if (errAud) throw errAud;
 
@@ -61,7 +63,8 @@ export default function CalendarioAuditoria() {
       const { data: tareasUrgentesDia, error: errUrg } = await supabase
         .from("tareas_urgentes")
         .select("id, empleado_id, descripcion, completada")
-        .eq("fecha", fechaSeleccionada);
+        .eq("fecha", fechaSeleccionada)
+        .is("cancelada_en", null);
 
       if (errUrg) throw errUrg;
 
@@ -147,21 +150,20 @@ export default function CalendarioAuditoria() {
     }));
   };
 
-  // Función para que el admin elimine una tarea urgente enviada
-  const eliminarTareaUrgente = async (urgenteId) => {
-    if (!confirm("¿Estás seguro de eliminar esta tarea urgente?")) return;
+  // Una urgencia se cancela sin borrar su historia.
+  const cancelarTareaUrgente = async (urgenteId) => {
+    if (!confirm("¿Cancelar esta tarea urgente? El registro se conservará en la auditoría.")) return;
 
     try {
-      const { error } = await supabase
-        .from("tareas_urgentes")
-        .delete()
-        .eq("id", urgenteId);
+      const { error } = await supabase.rpc("cancel_urgent_task", {
+        p_urgent_id: urgenteId,
+      });
 
       if (error) throw error;
       cargarDatosAuditoria(); // Recargamos los datos para actualizar la vista
     } catch (err) {
-      console.error("Error al eliminar tarea urgente:", err);
-      alert("No se pudo eliminar la tarea urgente.");
+      console.error("Error al cancelar tarea urgente:", err);
+      alert("No se pudo cancelar la tarea urgente.");
     }
   };
 
@@ -322,11 +324,11 @@ export default function CalendarioAuditoria() {
 
                                   {/* Botón para que el admin elimine esta urgencia */}
                                   <button
-                                    onClick={() => eliminarTareaUrgente(urg.id)}
+                                    onClick={() => cancelarTareaUrgente(urg.id)}
                                     className="text-red-400 hover:text-red-600 font-bold p-1 transition-colors"
-                                    aria-label={`Eliminar tarea urgente: ${urg.descripcion}`}
+                                    aria-label={`Cancelar tarea urgente: ${urg.descripcion}`}
                                   >
-                                    ✕
+                                    Cancelar
                                   </button>
                                 </div>
                               </div>

@@ -14,6 +14,8 @@ dist-ssr
 playwright-report/
 test-results/
 blob-report/
+supabase/.temp/
+.tmp-stage4-local/
 
 # Editor directories and files
 .vscode/*

@@ -1,16 +1,16 @@
 import {
   expect,
-  seedLegacySession,
+  seedAuthSession,
   test,
 } from "./fixtures/supabase-mock";
 
-const admin = { id: "admin-1", nombre: "Administración", rol: "admin" };
+const admin = { id: "10000000-0000-4000-8000-000000000001", auth_user_id: "20000000-0000-4000-8000-000000000001", nombre: "Administración", usuario: "admin.gns", rol: "admin", activo: true };
 
 test("mantiene compatibilidad con el esquema sin color cuando la capacidad está apagada", async ({
   page,
   supabaseMock,
 }) => {
-  await seedLegacySession(page, admin);
+  await seedAuthSession(page, supabaseMock, admin);
   supabaseMock.setTable("empleados", [admin]);
   supabaseMock.setTable("rutinas", [
     {

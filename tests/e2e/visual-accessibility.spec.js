@@ -1,12 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
 import {
   expect,
-  seedLegacySession,
+  seedAuthSession,
   test,
 } from "./fixtures/supabase-mock";
 
-const admin = { id: "admin-1", nombre: "Administración", rol: "admin" };
-const empleado = { id: "empleado-1", nombre: "Ana", rol: "empleado" };
+const admin = { id: "10000000-0000-4000-8000-000000000001", auth_user_id: "20000000-0000-4000-8000-000000000001", nombre: "Administración", usuario: "admin.gns", rol: "admin", activo: true };
+const empleado = { id: "10000000-0000-4000-8000-000000000002", auth_user_id: "20000000-0000-4000-8000-000000000002", nombre: "Ana", usuario: "ana", rol: "empleado", activo: true };
 
 const viewportMatrix = [
   { name: "mobile", width: 375, height: 812 },
@@ -15,7 +15,7 @@ const viewportMatrix = [
 ];
 
 async function seedAdminPanel(page, supabaseMock) {
-  await seedLegacySession(page, admin);
+  await seedAuthSession(page, supabaseMock, admin);
   supabaseMock.setTable("empleados", [admin]);
   supabaseMock.setTable("rutinas", []);
   supabaseMock.setTable("tareas_rutina", []);
@@ -96,7 +96,7 @@ function seedVisualData(supabaseMock, populated = false) {
 
 async function seedPopulatedAudit(page, supabaseMock) {
   const today = new Date().toISOString().split("T")[0];
-  await seedLegacySession(page, admin);
+  await seedAuthSession(page, supabaseMock, admin);
   supabaseMock.setTable("empleados", [empleado]);
   supabaseMock.setTable("empleado_rutinas", [
     {
@@ -156,10 +156,8 @@ async function openExpandedAudit(page) {
   await expect(page.getByText("Revisar cierre de caja")).toBeVisible();
 }
 
-async function openPanelAs(page, user) {
-  await page.evaluate((sessionUser) => {
-    localStorage.setItem("usuarioBarberia", JSON.stringify(sessionUser));
-  }, user);
+async function openPanelAs(page, supabaseMock, user) {
+  await seedAuthSession(page, supabaseMock, user);
   await page.goto("/panel");
 }
 
@@ -370,7 +368,7 @@ for (const viewport of viewportMatrix) {
         {
           slug: "equipo",
           button: /Equipo/,
-          heading: "Registrar Nuevo Empleado",
+          heading: "Registrar integrante",
         },
         {
           slug: "asignaciones",
@@ -409,7 +407,7 @@ for (const viewport of viewportMatrix) {
 
       for (const state of ["empty", "populated"]) {
         seedVisualData(supabaseMock, state === "populated");
-        await openPanelAs(page, empleado);
+        await openPanelAs(page, supabaseMock, empleado);
         await expect(page.getByRole("banner")).toBeVisible();
         await expect(page.getByRole("main")).toBeVisible();
         await expect(
@@ -426,7 +424,7 @@ for (const viewport of viewportMatrix) {
 
       for (const state of ["empty", "populated"]) {
         seedVisualData(supabaseMock, state === "populated");
-        await openPanelAs(page, admin);
+        await openPanelAs(page, supabaseMock, admin);
 
         await expect(page.getByRole("banner")).toBeVisible();
         await expect(page.getByRole("main")).toBeVisible();
@@ -497,13 +495,13 @@ test.describe("Interacción accesible", () => {
 
     await expect(employeesButton).toHaveAttribute("aria-current", "page");
     await expect(
-      page.getByRole("heading", { name: "Registrar Nuevo Empleado" }),
+      page.getByRole("heading", { name: "Registrar integrante" }),
     ).toBeVisible();
 
-    const legacyInput = page.getByLabel("Nombre del Barbero");
-    await focusWithKeyboard(page, legacyInput);
-    await expect(legacyInput).toBeFocused();
-    const focusOutline = await legacyInput.evaluate((element) => {
+    const employeeNameInput = page.getByLabel("Nombre", { exact: true });
+    await focusWithKeyboard(page, employeeNameInput);
+    await expect(employeeNameInput).toBeFocused();
+    const focusOutline = await employeeNameInput.evaluate((element) => {
       const style = getComputedStyle(element);
       return {
         color: style.outlineColor,
@@ -526,7 +524,7 @@ test.describe("Interacción accesible", () => {
     await page.getByRole("button", { name: /Equipo/ }).click();
 
     const primaryButton = page.getByRole("button", {
-      name: "Guardar Empleado",
+      name: "Crear cuenta",
     });
     const primaryBefore = await primaryButton.evaluate(
       (element) => getComputedStyle(element).backgroundColor,
@@ -544,7 +542,7 @@ test.describe("Interacción accesible", () => {
     await expect(page.getByRole("heading", { name: "Ana" })).toBeVisible();
     await page.getByRole("button", { name: /Ver detalle de tareas/ }).click();
     const destructiveButton = page.getByRole("button", {
-      name: "Eliminar tarea urgente: Revisar cierre de caja",
+      name: "Cancelar tarea urgente: Revisar cierre de caja",
     });
     const destructiveBefore = await destructiveButton.evaluate(
       (element) => getComputedStyle(element).color,
@@ -669,13 +667,13 @@ test.describe("Interacción accesible", () => {
       ).toBeVisible();
       await expectNoSeriousAxe(page, `Login ${theme}`);
 
-      await openPanelAs(page, empleado);
+      await openPanelAs(page, supabaseMock, empleado);
       await expect(
         page.getByRole("heading", { name: "Mis Protocolos Asignados" }),
       ).toBeVisible();
       await expectNoSeriousAxe(page, `Panel empleado ${theme}`);
 
-      await openPanelAs(page, admin);
+      await openPanelAs(page, supabaseMock, admin);
       const navigation = page.getByRole("navigation", {
         name: "Secciones de administración",
       });

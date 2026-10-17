@@ -1,6 +1,7 @@
 // src/components/EnviarTareaUrgente.jsx
 import { useState, useEffect } from "react";
 import { supabase } from "../services/supabase";
+import { currentBusinessDate } from "../utils/businessDate";
 
 export default function EnviarTareaUrgente() {
   const [empleados, setEmpleados] = useState([]);
@@ -14,6 +15,7 @@ export default function EnviarTareaUrgente() {
       const { data, error } = await supabase
         .from("empleados")
         .select("id, nombre, rol")
+        .eq("activo", true)
         .order("nombre");
 
       if (error) throw error;
@@ -42,7 +44,7 @@ export default function EnviarTareaUrgente() {
         {
           empleado_id: empleadoId,
           descripcion: descripcion.trim(),
-          fecha: new Date().toISOString().split("T")[0],
+          fecha: currentBusinessDate(),
           completada: false,
         },
       ]);

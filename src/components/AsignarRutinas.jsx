@@ -17,6 +17,7 @@ export default function AsignarRutinas() {
       const { data: empData, error: empErr } = await supabase
         .from("empleados")
         .select("id, nombre, rol")
+        .eq("activo", true)
         .order("nombre");
 
       if (empErr) throw empErr;
@@ -26,6 +27,7 @@ export default function AsignarRutinas() {
       const { data: rutData, error: rutErr } = await supabase
         .from("rutinas")
         .select("id, titulo")
+        .is("archivada_en", null)
         .order("titulo");
 
       if (rutErr) throw rutErr;

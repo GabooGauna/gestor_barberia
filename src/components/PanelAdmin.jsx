@@ -1,10 +1,13 @@
 // src/components/PanelAdmin.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../services/supabase";
 import CalendarioAuditoria from "./CalendarioAuditoria";
 import RegistroEmpleados from "./RegistroEmpleados"; // <-- Importamos nuestro componente modular
 import AsignarRutinas from "./AsignarRutinas";
 import EnviarTareaUrgente from "./EnviarTareaUrgente";
+import { runAdminUserAction } from "../services/adminUsers";
+import { passwordValidationError } from "../utils/auth";
+import { useAuth } from "../hooks/useAuth";
 import {
   DEFAULT_ROUTINE_COLOR,
   ROUTINE_COLORS_ENABLED,
@@ -41,6 +44,7 @@ function RoutineColorPicker({ name, value, onChange, disabled = false }) {
 }
 
 export default function PanelAdmin() {
+  const { profile, refreshProfile } = useAuth();
   const [vistaActiva, setVistaActiva] = useState("plantillas"); // 'plantillas', 'empleados', o 'auditoria'
 
   // Estados del Creador de Plantillas
@@ -57,6 +61,25 @@ export default function PanelAdmin() {
 
   // Estados para listar y administrar empleados existentes
   const [empleados, setEmpleados] = useState([]);
+  const [mensajeEquipo, setMensajeEquipo] = useState("");
+  const [errorEquipo, setErrorEquipo] = useState("");
+  const [accionEmpleado, setAccionEmpleado] = useState("");
+  const [empleadoReset, setEmpleadoReset] = useState(null);
+  const [passwordReset, setPasswordReset] = useState("");
+  const [passwordResetConfirmation, setPasswordResetConfirmation] = useState("");
+  const [mostrarPasswordReset, setMostrarPasswordReset] = useState(false);
+  const resetDialogRef = useRef(null);
+  const resetTriggerRef = useRef(null);
+
+  useEffect(() => {
+    if (!empleadoReset) return;
+    const dialog = resetDialogRef.current;
+    dialog.showModal();
+    return () => {
+      dialog.close();
+      queueMicrotask(() => resetTriggerRef.current?.focus());
+    };
+  }, [empleadoReset]);
 
   const secciones = [
     ["plantillas", "Plantillas", "Protocolos base"],
@@ -94,6 +117,8 @@ export default function PanelAdmin() {
       const { data, error } = await supabase
         .from("rutinas")
         .select(selection)
+        .is("archivada_en", null)
+        .is("tareas_rutina.archivada_en", null)
         .order("titulo", { ascending: true });
 
       if (error) throw error;
@@ -124,13 +149,14 @@ export default function PanelAdmin() {
       setCargandoEmpleados(true);
       const { data, error } = await supabase
         .from("empleados")
-        .select("id, nombre, rol")
+        .select("id, nombre, usuario, rol, activo")
         .order("nombre", { ascending: true });
 
       if (error) throw error;
       setEmpleados(data || []);
     } catch (err) {
       console.error("Error al cargar empleados:", err);
+      setErrorEquipo("No se pudo cargar el equipo.");
     } finally {
       setCargandoEmpleados(false);
     }
@@ -142,6 +168,19 @@ export default function PanelAdmin() {
       cargarEmpleados();
     });
   }, []);
+
+  useEffect(() => {
+    if (!empleadoReset) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape" && !accionEmpleado) {
+        setEmpleadoReset(null);
+        setPasswordReset("");
+        setPasswordResetConfirmation("");
+      }
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [empleadoReset, accionEmpleado]);
 
   const crearRutina = async (e) => {
     e.preventDefault();
@@ -170,11 +209,11 @@ export default function PanelAdmin() {
     }
   };
 
-  const eliminarRutina = async (rutinaId, e) => {
+  const archivarRutina = async (rutinaId, e) => {
     e.stopPropagation();
     if (
       !confirm(
-        "¿Estás seguro de eliminar esta rutina completa y todas sus tareas?",
+        "¿Archivar esta rutina? Dejará de estar disponible, pero su historial se conservará.",
       )
     )
       return;
@@ -182,7 +221,7 @@ export default function PanelAdmin() {
     try {
       const { error } = await supabase
         .from("rutinas")
-        .delete()
+        .update({ archivada_en: new Date().toISOString() })
         .eq("id", rutinaId);
 
       if (error) throw error;
@@ -193,8 +232,8 @@ export default function PanelAdmin() {
 
       await cargarRutinas({ mostrarCarga: false });
     } catch (err) {
-      console.error("Error al eliminar la rutina:", err);
-      alert("No se pudo eliminar la rutina.");
+      console.error("Error al archivar la rutina:", err);
+      alert("No se pudo archivar la rutina.");
     }
   };
 
@@ -233,13 +272,13 @@ export default function PanelAdmin() {
     }
   };
 
-  const eliminarTarea = async (tareaId) => {
-    if (!confirm("¿Estás seguro de eliminar esta tarea?")) return;
+  const archivarTarea = async (tareaId) => {
+    if (!confirm("¿Archivar esta tarea? Su historial se conservará.")) return;
 
     try {
       const { error } = await supabase
         .from("tareas_rutina")
-        .delete()
+        .update({ archivada_en: new Date().toISOString() })
         .eq("id", tareaId);
 
       if (error) throw error;
@@ -249,8 +288,8 @@ export default function PanelAdmin() {
         rutinasActualizadas.find(({ id }) => id === rutinaSeleccionada.id) || null,
       );
     } catch (err) {
-      console.error("Error al eliminar la tarea:", err);
-      alert("No se pudo eliminar la tarea.");
+      console.error("Error al archivar la tarea:", err);
+      alert("No se pudo archivar la tarea.");
     }
   };
 
@@ -280,21 +319,61 @@ export default function PanelAdmin() {
     }
   };
 
-  // Función para eliminar un empleado desde la gestión de equipo
-  const eliminarEmpleado = async (empleadoId) => {
-    if (!confirm("¿Estás seguro de eliminar este empleado?")) return;
-
+  const administrarEmpleado = async (empleado, action, extra = {}) => {
+    const actionKey = `${action}:${empleado.id}`;
     try {
-      const { error } = await supabase
-        .from("empleados")
-        .delete()
-        .eq("id", empleadoId);
+      setAccionEmpleado(actionKey);
+      setMensajeEquipo("");
+      setErrorEquipo("");
+      await runAdminUserAction({ action, employeeId: empleado.id, ...extra });
+      const labels = {
+        deactivate: "Cuenta desactivada. El historial se conserva.",
+        reactivate: "Cuenta reactivada.",
+        change_role: "Rol actualizado.",
+        reset_password: "Contraseña actualizada. Comunicala por un canal seguro.",
+      };
+      setMensajeEquipo(labels[action]);
+      await cargarEmpleados();
+      if (empleado.id === profile.id) await refreshProfile();
+      return true;
+    } catch (error) {
+      const messages = {
+        cannot_deactivate_current_account: "No podés desactivar tu propia cuenta.",
+        cannot_deactivate_last_admin: "Debe quedar al menos un administrador activo.",
+        cannot_demote_last_admin: "Debe quedar al menos un administrador activo.",
+        reconciliation_required: "La operación requiere revisión administrativa antes de reintentar.",
+        admin_required: "Tu cuenta ya no tiene permisos administrativos.",
+        account_not_found: "La cuenta ya no está disponible.",
+      };
+      setErrorEquipo(messages[error.code] || "No se pudo completar la operación.");
+      return false;
+    } finally {
+      setAccionEmpleado("");
+    }
+  };
 
-      if (error) throw error;
-      cargarEmpleados();
-    } catch (err) {
-      console.error("Error al eliminar empleado:", err);
-      alert("No se pudo eliminar el empleado.");
+  const confirmarEstado = (empleado) => {
+    const action = empleado.activo ? "deactivate" : "reactivate";
+    if (empleado.activo && !confirm(`¿Desactivar la cuenta de ${empleado.nombre}? No se borrará su historial.`)) return;
+    administrarEmpleado(empleado, action);
+  };
+
+  const cambiarRol = (empleado, role) => {
+    if (role === empleado.rol) return;
+    if (!confirm(`¿Cambiar el rol de ${empleado.nombre} a ${role}?`)) return;
+    administrarEmpleado(empleado, "change_role", { role });
+  };
+
+  const restablecerPassword = async (event) => {
+    event.preventDefault();
+    const validationError = passwordValidationError(passwordReset);
+    if (validationError) return setErrorEquipo(validationError);
+    if (passwordReset !== passwordResetConfirmation) return setErrorEquipo("Las contraseñas no coinciden.");
+    const completed = await administrarEmpleado(empleadoReset, "reset_password", { password: passwordReset });
+    if (completed) {
+      setEmpleadoReset(null);
+      setPasswordReset("");
+      setPasswordResetConfirmation("");
     }
   };
 
@@ -404,9 +483,9 @@ export default function PanelAdmin() {
                         {rutina.tareas_rutina?.length || 0} tareas
                       </span>
                       <button
-                        onClick={(e) => eliminarRutina(rutina.id, e)}
+                        onClick={(e) => archivarRutina(rutina.id, e)}
                         className="text-red-400 hover:text-red-600 font-bold p-3 transition-colors"
-                        aria-label={`Eliminar rutina ${rutina.titulo}`}
+                        aria-label={`Archivar rutina ${rutina.titulo}`}
                       >
                         ✕
                       </button>
@@ -499,10 +578,10 @@ export default function PanelAdmin() {
                               </span>
                             </div>
                             <button
-                              onClick={() => eliminarTarea(t.id)}
+                              onClick={() => archivarTarea(t.id)}
                               className="text-red-400 hover:text-red-600 font-bold p-1 transition-colors"
-                              title="Eliminar tarea"
-                              aria-label={`Eliminar tarea: ${t.descripcion}`}
+                              title="Archivar tarea"
+                              aria-label={`Archivar tarea: ${t.descripcion}`}
                             >
                               ✕
                             </button>
@@ -528,22 +607,19 @@ export default function PanelAdmin() {
         </div>
       )}
 
-      {/* VISTA 2: Gestión de Empleados (Modular) */}
+      {/* VISTA 2: Gestión segura de cuentas */}
       {vistaActiva === "empleados" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Columna Izquierda: Formulario de Registro */}
+        <div className="team-management">
           <RegistroEmpleados onEmpleadoCreado={cargarEmpleados} />
 
-          {/* Columna Derecha: Lista de Empleados Actuales */}
           <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-            <h3 className="text-lg font-bold text-gray-800 mb-1">
-              Personal registrado
-            </h3>
-            <p className="text-xs text-gray-500 mb-4">
-              Listado actual del equipo de trabajo y sus roles.
-            </p>
+            <h3 className="text-lg font-bold text-gray-800 mb-1">Personal registrado</h3>
+            <p className="text-xs text-gray-500 mb-4">El estado y los permisos se validan en la base de datos.</p>
 
-            <div className="space-y-3 max-h-96 overflow-y-auto">
+            {mensajeEquipo && <p role="status" className="form-message form-message--exito mb-4">{mensajeEquipo}</p>}
+            {errorEquipo && <p role="alert" className="form-message form-message--error mb-4">{errorEquipo}</p>}
+
+            <div className="team-list">
               {cargandoEmpleados && (
                 <div className="loading-state py-4" role="status" aria-live="polite">
                   <span className="loading-dot" aria-hidden="true" />
@@ -554,32 +630,95 @@ export default function PanelAdmin() {
                 <p className="text-sm text-gray-500 py-4">Todavía no hay integrantes registrados.</p>
               )}
               {!cargandoEmpleados && empleados.map((emp) => (
-                <div
-                  key={emp.id}
-                  className="p-4 bg-gray-50 border rounded-xl flex justify-between items-center"
-                >
-                  <div>
-                    <h4 className="font-bold text-gray-800 capitalize">
-                      {emp.nombre}
-                    </h4>
-                    <span className="text-xs uppercase bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">
-                      {emp.rol}
+                <article key={emp.id} className="team-row">
+                  <div className="team-row__identity">
+                    <h4>{emp.nombre}</h4>
+                    <span>@{emp.usuario}</span>
+                    <span className={`account-state ${emp.activo ? "is-active" : "is-inactive"}`}>
+                      {emp.activo ? "Cuenta activa" : "Cuenta desactivada"}
                     </span>
                   </div>
-                  {emp.rol !== "admin" && (
+                  <div className="team-row__controls">
+                    <label>
+                      <span>Rol</span>
+                      <select
+                        value={emp.rol}
+                        onChange={(event) => cambiarRol(emp, event.target.value)}
+                        disabled={Boolean(accionEmpleado) || !emp.activo}
+                        aria-label={`Rol de ${emp.nombre}`}
+                      >
+                        <option value="empleado">Empleado</option>
+                        <option value="admin">Administrador</option>
+                      </select>
+                    </label>
                     <button
-                      onClick={() => eliminarEmpleado(emp.id)}
-                      className="text-red-400 hover:text-red-600 font-bold text-sm px-2 py-1 transition-colors"
-                      title="Eliminar empleado"
-                      aria-label={`Eliminar empleado: ${emp.nombre}`}
+                      type="button"
+                      className="button button--secondary"
+                      disabled={Boolean(accionEmpleado)}
+                      onClick={(event) => {
+                        resetTriggerRef.current = event.currentTarget;
+                        setErrorEquipo("");
+                        setMensajeEquipo("");
+                        setEmpleadoReset(emp);
+                      }}
                     >
-                      ✕ Eliminar
+                      Cambiar contraseña
                     </button>
-                  )}
-                </div>
+                    <button
+                      type="button"
+                      className={emp.activo ? "button button--danger" : "button button--secondary"}
+                      disabled={Boolean(accionEmpleado) || emp.id === profile.id}
+                      onClick={() => confirmarEstado(emp)}
+                    >
+                      {accionEmpleado.endsWith(`:${emp.id}`)
+                        ? "Procesando…"
+                        : emp.activo ? "Desactivar" : "Reactivar"}
+                    </button>
+                  </div>
+                </article>
               ))}
             </div>
           </div>
+
+          {empleadoReset && (
+              <dialog ref={resetDialogRef} className="security-dialog" aria-labelledby="reset-password-title" onCancel={(event) => {
+                event.preventDefault();
+                if (accionEmpleado) return;
+                setEmpleadoReset(null);
+                setPasswordReset("");
+                setPasswordResetConfirmation("");
+                setMostrarPasswordReset(false);
+                setErrorEquipo("");
+              }}>
+                <h3 id="reset-password-title">Cambiar contraseña</h3>
+                <p>Definí una nueva contraseña para {empleadoReset.nombre}. No se mostrará nuevamente.</p>
+                <form onSubmit={restablecerPassword} className="space-y-4" noValidate>
+                  <div className="form-field compact">
+                    <label htmlFor="reset-password">Nueva contraseña</label>
+                    <input id="reset-password" type={mostrarPasswordReset ? "text" : "password"} autoComplete="new-password" value={passwordReset} onChange={(event) => setPasswordReset(event.target.value)} autoFocus />
+                  </div>
+                  <div className="form-field compact">
+                    <label htmlFor="reset-password-confirmation">Repetir contraseña</label>
+                    <input id="reset-password-confirmation" type={mostrarPasswordReset ? "text" : "password"} autoComplete="new-password" value={passwordResetConfirmation} onChange={(event) => setPasswordResetConfirmation(event.target.value)} />
+                  </div>
+                  <label className="password-visibility">
+                    <input type="checkbox" checked={mostrarPasswordReset} onChange={(event) => setMostrarPasswordReset(event.target.checked)} />
+                    Mostrar contraseñas
+                  </label>
+                  {errorEquipo && <p role="alert" className="form-message form-message--error">{errorEquipo}</p>}
+                  <div className="dialog-actions">
+                    <button type="button" className="button button--secondary" disabled={Boolean(accionEmpleado)} onClick={() => {
+                      setEmpleadoReset(null);
+                      setPasswordReset("");
+                      setPasswordResetConfirmation("");
+                      setMostrarPasswordReset(false);
+                      setErrorEquipo("");
+                    }}>Cancelar</button>
+                    <button type="submit" className="button button--primary" disabled={Boolean(accionEmpleado)}>Guardar contraseña</button>
+                  </div>
+                </form>
+              </dialog>
+          )}
         </div>
       )}
 

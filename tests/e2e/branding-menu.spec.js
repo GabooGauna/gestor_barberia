@@ -1,13 +1,13 @@
 import {
   expect,
-  seedLegacySession,
+  seedAuthSession,
   test,
 } from "./fixtures/supabase-mock";
 
-const admin = { id: "admin-1", nombre: "Administración", rol: "admin" };
+const admin = { id: "10000000-0000-4000-8000-000000000001", auth_user_id: "20000000-0000-4000-8000-000000000001", nombre: "Administración", usuario: "admin.gns", rol: "admin", activo: true };
 
 async function seedPanel(page, supabaseMock) {
-  await seedLegacySession(page, admin);
+  await seedAuthSession(page, supabaseMock, admin);
   supabaseMock.setTable("empleados", [admin]);
   supabaseMock.setTable("rutinas", []);
   supabaseMock.setTable("tareas_rutina", []);
@@ -96,9 +96,8 @@ for (const viewport of [
     await trigger.click();
     await visibleMenu.getByRole("button", { name: "Cerrar sesión" }).click();
     await expect(page).toHaveURL(/\/$/);
-    await expect
-      .poll(() => page.evaluate(() => localStorage.getItem("usuarioBarberia")))
-      .toBeNull();
+    await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("sb-") && key.endsWith("-auth-token")))).toEqual([]);
+    expect(supabaseMock.authRequests.some(({ path }) => path === "/auth/v1/logout")).toBe(true);
     expect(supabaseMock.mutations).toEqual([]);
   });
 }

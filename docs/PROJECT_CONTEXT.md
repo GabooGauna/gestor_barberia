@@ -8,11 +8,57 @@
 - Inspección remota: MCP `supabase_barberia` en modo solo lectura.
 - Alcance: auditoría y documentación; no se modificó lógica ni esquema remoto.
 
+## Estado local de Etapa 4
+
+Al 17 de octubre de 2026, el repositorio local reemplaza el acceso por PIN por
+Supabase Auth con username y contraseña. El username canónico se traduce a un
+email técnico determinista; Supabase conserva las contraseñas. La sesión se
+verifica contra `get_current_employee_profile()`, el rol autorizado vive en
+`empleados.rol` y todas las operaciones de negocio quedan limitadas por RLS o
+RPC. La administración de cuentas usa la Edge Function `admin-users`; la
+service role no llega al navegador.
+
+Las migraciones expand/cutover, sus rollbacks, pruebas SQL y el runbook están
+preparados, pero **no se aplicaron al proyecto remoto**. Por eso, las secciones
+de relevamiento remoto que siguen conservan el baseline inseguro observado y
+no describen un despliegue ya realizado. Producción continúa bloqueada hasta
+ensayar backup/restauración y verificar exactamente la configuración candidata
+de Auth, Edge, grants y RLS con autorización separada.
+
+La Etapa 4 quedó cerrada localmente el 17 de octubre de 2026 con Backend,
+Frontend, Tester y Reviewer aprobados y sin hallazgos bloqueantes/altos
+abiertos. La evidencia y sus límites se conservan en
+`docs/reviews/stage-04-validation.md`; el dictamen independiente está en
+`docs/reviews/stage-04-final-review.md`. Pasaron lint/build, 40/40 E2E de la
+suite previa, 7/7 casos afectados reejecutados con el nuevo test de teclado
+del diálogo, 6/6 unitarios y 8/8 pasos SQL. También se validaron Auth y Edge
+reales en un stack local sintético; el ajuste final de preflight se verificó
+con el handler y Fetch nativo. No se declara una repetición completa de 41
+E2E ni del stack real después de ese ajuste acotado.
+
+Las correcciones finales cubren CORS, foco del diálogo, ACL bootstrap,
+protección del único admin y locks antes de revalidar al actor. La migración de
+empleados existentes usa Admin API y `admin_link_auth_account` conservando sus
+UUID; la acción `create` de Edge es sólo para integrantes nuevos. El runbook
+documenta bootstrap, reconciliación y rollback fail-closed. No se inició
+Etapa 5 ni se autorizó producción.
+
+```text
+Browser
+└─ React 19 + React Router 7
+   ├─ /                 Login username/password
+   ├─ /panel            Ruta protegida por sesión + perfil DB activo
+   └─ supabase-js       anon key pública, JWT de Auth
+      ├─ Auth           sesión/refresh/logout
+      ├─ PostgREST      RLS en seis tablas + RPC de trabajo
+      └─ admin-users    operaciones de cuenta con service role sólo en runtime
+```
+
 ## Propósito actual
 
 La aplicación administra protocolos operativos de una barbería. Un administrador crea rutinas y tareas, registra personal, asigna rutinas, envía tareas urgentes y revisa cumplimiento diario. Un empleado visualiza sus asignaciones y marca tareas como realizadas.
 
-## Arquitectura actual
+## Arquitectura remota relevada antes de Etapa 4
 
 ```text
 Browser
@@ -59,7 +105,7 @@ No existe servidor de aplicación, capa de dominio, API propia, funciones públi
 - Scripts: `dev`, `build`, `lint`, `preview` y variantes `test:e2e*`.
 - `package.json` declara rangos con `^`; `package-lock.json` es la fuente reproducible para `npm ci`.
 
-## Flujos actuales
+## Flujos remotos relevados antes de Etapa 4
 
 ### Acceso
 
@@ -107,7 +153,7 @@ documentados en `docs/contracts/rutinas-color.md`. Mientras la capacidad no est�
 habilitada después de aplicar la migración en cada ambiente, el cliente no debe
 leer ni escribir `rutinas.color` y debe usar el fallback visual local `copper`.
 
-## Contratos actuales con Supabase
+## Contratos remotos relevados antes de Etapa 4
 
 | Flujo | Tabla | Operaciones y filtros |
 |---|---|---|
@@ -167,8 +213,9 @@ La aplicación **no es apta para producción**. El gate solo puede revisarse des
 - `npm audit`: 0 vulnerabilidades luego de actualizar la resolución transitiva de `source-map-js` a una versión corregida.
 
 Tester y Reviewer aprobaron la Etapa 3 el 16 de octubre de 2026. La aplicación
-continúa bloqueada para producción por los riesgos críticos de autenticación,
-rol local, RLS y privilegios anónimos. No se inició la Etapa 4.
+continuaba bloqueada para producción por los riesgos críticos de autenticación,
+rol local, RLS y privilegios anónimos. Este es el registro histórico del cierre
+de Etapa 3; el estado local posterior de Etapa 4 se describe al inicio.
 
 ## Oportunidades de optimización del bundle
 
@@ -180,10 +227,16 @@ Estas acciones quedan documentadas, no implementadas en Etapa 2:
 4. Retirar `App.css` y assets del template solo después de confirmar que no se usan.
 5. Comparar peso total, carga inicial y navegación antes/después; aumentar el límite de advertencia sin reducir bytes no cuenta como optimización.
 
-## Decisiones pendientes
+## Decisiones y verificaciones pendientes de despliegue
 
-- Alta, recuperación y baja de cuentas; fuente de identidad.
-- Alcance exacto de datos por empleado y posibles roles adicionales.
-- Retención histórica y reemplazo de cascadas por restricción, archivado o soft delete.
-- Zona horaria canónica y cierre de jornada.
-- Entorno local/staging para migraciones y E2E sin datos reales.
+- Autorizar y ejecutar backup/restore drill sobre staging antes de cualquier
+  cambio remoto.
+- Verificar signup global OFF con proveedor email habilitado para login,
+  redirect allowlist, límites de intentos, CAPTCHA si corresponde y MFA/AAL2
+  para administradores.
+- Definir el canal operativo de entrega de contraseñas iniciales y el eventual
+  reemplazo por invitaciones de un solo uso o recuperación con correo real.
+- Aplicar y verificar `rutinas.color` por separado; no forma parte del cutover
+  Auth.
+- Repetir Auth/RLS/Edge/E2E contra la configuración candidata real antes de
+  levantar el bloqueo de producción.

@@ -3,8 +3,9 @@
 ## Aislamiento de Supabase
 
 Playwright inicia Vite con `VITE_SUPABASE_URL=http://127.0.0.1:54321` y una
-clave sintética. El fixture `supabase-mock.js` intercepta PostgREST y responde
-con datos en memoria.
+clave sintética. El fixture `supabase-mock.js` intercepta Auth, PostgREST, RPC
+y la Edge Function `admin-users`; responde con usuarios, JWT expirables y
+datos exclusivamente sintéticos en memoria.
 
 Hay tres barreras contra datos reales:
 
@@ -13,17 +14,27 @@ Hay tres barreras contra datos reales:
 2. toda URL cuyo host termina en `.supabase.co` se aborta;
 3. el fixture falla la prueba si detecta un intento hacia ese host.
 
-Las escrituras se bloquean por defecto en el mock y se registran en
-`supabaseMock.mutations`. Un test puede habilitarlas por tabla con
+Las escrituras de tabla se bloquean por defecto y se registran en
+`supabaseMock.mutations`. Auth, RPC y operaciones administrativas tienen
+trazas separadas en `authRequests`, `rpcCalls` y `adminActions`. Un test puede
+habilitar escrituras de tabla con
 `allowMutationsFor` para simular `POST`, `PATCH` o `DELETE` exclusivamente en
 memoria. `delayTable` permite observar estados de carga sin contactar servicios
 externos. Ninguna de estas capacidades relaja el bloqueo de hosts remotos.
 
-## Sesión transitoria
+## Sesiones de prueba
 
-`seedLegacySession` existe solo para alcanzar los paneles del prototipo actual.
-No valida el PIN ni convierte `localStorage` en contrato de autenticación. Debe
-eliminarse cuando la Etapa 4 implemente Supabase Auth.
+`seedAuthSession` registra un perfil sintético vinculado a un `auth.users`
+sintético y persiste el formato de sesión de Supabase. Puede emitir un access
+token vencido para probar el rechazo del refresh. `loginThroughUi` recorre el
+login real de la SPA. No existe ningún helper para `usuarioBarberia` y las
+pruebas negativas verifican que manipular esa clave no otorga identidad ni rol.
+
+Este mock valida contratos de interfaz, estados y requests; no prueba la
+seguridad efectiva de RLS ni de la service role. El gate de seguridad se apoya
+además en las pruebas SQL y Auth/Edge ejecutadas contra el Supabase local
+aislado, documentadas en `docs/reviews/stage-04-validation.md` y auditadas en
+`docs/reviews/stage-04-final-review.md`.
 
 ## Comandos
 
@@ -46,7 +57,16 @@ La suite levanta dos builds locales aislados:
 El segundo proyecto solo ejecuta `routine-colors-enabled.spec.js`. Esto prueba
 el contrato futuro sin asumir que la migración exista en Supabase remoto.
 
-## Cobertura visual de Etapa 3
+## Cobertura funcional y visual de Etapa 4
+
+`login.spec.js` cubre login correcto/incorrecto, username inválido, sesión
+expirada, acceso directo sin sesión y manipulación del rol legacy.
+`account-management.spec.js` cubre alta, validación y reset de contraseña,
+activación/desactivación, cambio de rol, preservación del perfil y ausencia de
+controles administrativos para empleados.
+El diálogo de reset tiene una prueba adicional de contención de foco,
+Tab/Shift+Tab, Escape, devolución de foco, descarte de contraseña y Axe con
+ambos temas en 375, 768 y 1440 px.
 
 `visual-accessibility.spec.js` valida el selector visual
 claro/oscuro/sistema, su persistencia, la aplicación previa a la primera
@@ -63,7 +83,8 @@ apoyan en roles, nombres accesibles, `aria-current` y atributos de tema; no
 dependen de clases CSS ni de detalles de Tailwind.
 
 `branding-menu.spec.js` cubre logo, texto alternativo, proporciones, título de
-pestaña, centrado móvil, menú de acciones, Escape, retorno de foco y logout.
+pestaña, centrado móvil, menú de acciones, Escape, retorno de foco y logout de
+Supabase Auth.
 Los specs `routine-colors-disabled` y `routine-colors-enabled` prueban el
 fallback `copper`, la ausencia de referencias a una columna inexistente y los
 payloads semánticos de alta/edición/restauración cuando la capacidad está

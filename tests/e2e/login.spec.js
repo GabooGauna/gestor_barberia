@@ -1,73 +1,89 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "./fixtures/supabase-mock";
+import { expect, seedAuthSession, TEST_PASSWORD, test } from "./fixtures/supabase-mock";
 
-test.describe("Acceso transitorio", () => {
-  test("muestra el estado vacío sin contactar datos reales", async ({
-    page,
-    supabaseMock,
-  }) => {
-    supabaseMock.setTable("empleados", []);
+const admin = {
+  id: "10000000-0000-4000-8000-000000000001",
+  auth_user_id: "20000000-0000-4000-8000-000000000001",
+  nombre: "Administración",
+  usuario: "admin.gns",
+  rol: "admin",
+  activo: true,
+};
 
+test.describe("Supabase Auth y rutas protegidas", () => {
+  test("inicia sesión con username canónico y contraseña sin exponer PIN", async ({ page, supabaseMock }) => {
+    supabaseMock.registerUser(admin, { password: TEST_PASSWORD });
     await page.goto("/");
 
-    await expect(
-      page.getByRole("heading", { name: "La jornada, en orden." }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("No hay empleados registrados en la base de datos."),
-    ).toBeVisible();
-    expect(supabaseMock.mutations).toEqual([]);
+    await expect(page.getByRole("heading", { name: "La jornada, en orden." })).toBeVisible();
+    await expect(page.getByLabel("Usuario")).toBeVisible();
+    await expect(page.getByLabel("Contraseña", { exact: true })).toHaveAttribute("type", "password");
+    await expect(page.getByText(/PIN/i)).toHaveCount(0);
+
+    await page.getByLabel("Usuario").fill("  ADMIN.GNS  ");
+    await page.getByLabel("Contraseña", { exact: true }).fill(TEST_PASSWORD);
+    await page.getByRole("button", { name: "Iniciar sesión" }).click();
+
+    await expect(page).toHaveURL(/\/panel$/);
+    await expect(page.getByRole("heading", { name: "Mesa de trabajo" })).toBeVisible();
+    const passwordRequest = supabaseMock.authRequests.find(({ query }) => query.includes("grant_type=password"));
+    expect(passwordRequest?.body.email).toBe("admin.gns@auth.gestor-barberia.invalid");
+    expect(passwordRequest?.body.password).toBe(TEST_PASSWORD);
+    expect(supabaseMock.rpcCalls.some(({ rpc }) => rpc === "get_current_employee_profile")).toBe(true);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("usuarioBarberia"))).toBeNull();
   });
 
-  test("permite recorrer la selección de perfil sin fijar el PIN como contrato", async ({
-    page,
-    supabaseMock,
-  }) => {
-    supabaseMock.setTable("empleados", [
-      { id: "empleado-1", nombre: "Ana", rol: "empleado" },
-    ]);
-
+  test("usa un error genérico ante credenciales incorrectas", async ({ page, supabaseMock }) => {
+    supabaseMock.registerUser(admin, { password: TEST_PASSWORD });
     await page.goto("/");
-    await page.getByRole("button", { name: /Ana/ }).click();
+    await page.getByLabel("Usuario").fill(admin.usuario);
+    await page.getByLabel("Contraseña", { exact: true }).fill("Incorrecta123!");
+    await page.getByRole("button", { name: "Iniciar sesión" }).click();
 
-    await expect(page.getByLabel("Ingresa tu PIN de 4 dígitos")).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Confirmar e Ingresar" }),
-    ).toBeVisible();
-
-    await page.getByRole("button", { name: "Cambiar" }).click();
-    await expect(page.getByRole("button", { name: /Ana/ })).toBeVisible();
-    expect(supabaseMock.mutations).toEqual([]);
+    await expect(page.getByRole("alert")).toHaveText("No pudimos iniciar sesión con esas credenciales.");
+    await expect(page).toHaveURL(/\/$/);
   });
 
-  test("presenta un error controlado cuando falla la carga", async ({
-    page,
-    supabaseMock,
-  }) => {
-    supabaseMock.failTable("empleados");
-
+  test("rechaza username inválido en cliente sin consultar Auth", async ({ page, supabaseMock }) => {
     await page.goto("/");
+    await page.getByLabel("Usuario").fill("Usuario con espacios");
+    await page.getByLabel("Contraseña", { exact: true }).fill(TEST_PASSWORD);
+    await page.getByRole("button", { name: "Iniciar sesión" }).click();
 
-    await expect(
-      page.getByText("No se pudo conectar con la lista de empleados."),
-    ).toBeVisible();
-    expect(supabaseMock.mutations).toEqual([]);
+    await expect(page.getByRole("alert")).toHaveText("Revisá el usuario y la contraseña.");
+    expect(supabaseMock.authRequests).toEqual([]);
   });
 
-  test("no tiene violaciones críticas o serias de accesibilidad en el acceso vacío", async ({
-    page,
-    supabaseMock,
-  }) => {
-    supabaseMock.setTable("empleados", []);
+  test("redirige acceso directo sin sesión", async ({ page, supabaseMock }) => {
+    await page.goto("/panel");
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("heading", { name: "Ingresar" })).toBeVisible();
+    expect(supabaseMock.rpcCalls).toEqual([]);
+  });
+
+  test("rechaza una sesión expirada cuyo refresh token ya no es válido", async ({ page, supabaseMock }) => {
+    await seedAuthSession(page, supabaseMock, admin, { expired: true });
+    await page.goto("/panel");
+
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("alert")).toContainText(/sesión|Ingresá nuevamente/i);
+    expect(supabaseMock.authRequests.some(({ query }) => query.includes("grant_type=refresh_token"))).toBe(true);
+  });
+
+  test("no acepta usuarioBarberia manipulado como identidad o rol", async ({ page, supabaseMock }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("usuarioBarberia", JSON.stringify({ id: "intruso", rol: "admin", nombre: "Intruso" }));
+    });
+    await page.goto("/panel");
+
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("navigation", { name: "Secciones de administración" })).toHaveCount(0);
+    expect(supabaseMock.rpcCalls).toEqual([]);
+  });
+
+  test("no presenta violaciones Axe críticas o serias en login", async ({ page }) => {
     await page.goto("/");
-
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa"])
-      .analyze();
-    const seriousViolations = results.violations.filter(({ impact }) =>
-      ["critical", "serious"].includes(impact),
-    );
-
-    expect(seriousViolations).toEqual([]);
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(results.violations.filter(({ impact }) => ["critical", "serious"].includes(impact))).toEqual([]);
   });
 });

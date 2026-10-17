@@ -8,24 +8,22 @@ import {
   normalizeRoutineColor,
   routineColorClass,
 } from "../utils/coloresRutina";
+import { currentBusinessDate } from "../utils/businessDate";
 
-export default function PanelEmpleado() {
+export default function PanelEmpleado({ usuario }) {
   const [rutinasAsignadas, setRutinasAsignadas] = useState([]);
   const [tareasUrgentes, setTareasUrgentes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [completadasHoy, setCompletadasHoy] = useState({});
   const [errorMensaje, setErrorMensaje] = useState("");
 
-  const [usuario] = useState(() =>
-    JSON.parse(localStorage.getItem("usuarioBarberia")),
-  );
   const usuarioId = usuario?.id;
 
   const cargarDatosAsignados = useCallback(async () => {
     try {
       setCargando(true);
       setErrorMensaje("");
-      const hoy = new Date().toISOString().split("T")[0];
+      const hoy = currentBusinessDate();
 
       // 1. Buscamos rutinas asignadas
       const { data: asignaciones, error: errAsig } = await supabase
@@ -61,7 +59,8 @@ export default function PanelEmpleado() {
         .from("tareas_urgentes")
         .select("id, descripcion, completada")
         .eq("empleado_id", usuarioId)
-        .eq("fecha", hoy);
+        .eq("fecha", hoy)
+        .is("cancelada_en", null);
 
       if (errUrg) throw errUrg;
       setTareasUrgentes(datosUrgentes || []);
@@ -71,7 +70,8 @@ export default function PanelEmpleado() {
         .from("auditoria_diaria")
         .select("tarea_id")
         .eq("empleado_id", usuarioId)
-        .eq("fecha", hoy);
+        .eq("fecha", hoy)
+        .is("anulada_en", null);
 
       if (errAuditoria) throw errAuditoria;
 
@@ -101,48 +101,29 @@ export default function PanelEmpleado() {
   }, [cargarDatosAsignados, usuarioId]);
 
   const toggleTarea = async (tareaId, esUrgente = false) => {
-    const hoy = new Date().toISOString().split("T")[0];
     const yaCompletada = completadasHoy[tareaId];
 
     try {
       if (esUrgente) {
-        // Actualizamos estado en la tabla de tareas urgentes
         const nuevoEstado = !yaCompletada;
-        const { error } = await supabase
-          .from("tareas_urgentes")
-          .update({ completada: nuevoEstado })
-          .eq("id", tareaId);
+        const { error } = await supabase.rpc("set_urgent_completion", {
+          p_urgent_id: tareaId,
+          p_completed: nuevoEstado,
+        });
 
         if (error) throw error;
         setCompletadasHoy((prev) => ({ ...prev, [tareaId]: nuevoEstado }));
       } else {
-        // Lógica habitual para tareas de rutina
-        if (yaCompletada) {
-          await supabase
-            .from("auditoria_diaria")
-            .delete()
-            .eq("tarea_id", tareaId)
-            .eq("empleado_id", usuario?.id)
-            .eq("fecha", hoy);
-
-          setCompletadasHoy((prev) => {
-            const newState = { ...prev };
-            delete newState[tareaId];
-            return newState;
-          });
-        } else {
-          const { error } = await supabase
-            .from("auditoria_diaria")
-            .insert([
-              { tarea_id: tareaId, empleado_id: usuario?.id, fecha: hoy },
-            ]);
-
-          if (error) throw error;
-          setCompletadasHoy((prev) => ({ ...prev, [tareaId]: true }));
-        }
+        const { error } = await supabase.rpc("set_task_completion", {
+          p_tarea_id: tareaId,
+          p_completed: !yaCompletada,
+        });
+        if (error) throw error;
+        setCompletadasHoy((prev) => ({ ...prev, [tareaId]: !yaCompletada }));
       }
     } catch (err) {
       console.error("Error al actualizar tarea:", err);
+      setErrorMensaje("No se pudo actualizar la tarea. Volvé a intentar.");
     }
   };
 
