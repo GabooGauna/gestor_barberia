@@ -8,12 +8,14 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sessionIssue, setSessionIssue] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(true);
   const intentionalLogout = useRef(false);
 
   const loadProfile = useCallback(async (nextSession) => {
     if (!nextSession) {
       setSession(null);
       setProfile(null);
+      setMfaRequired(true);
       setLoading(false);
       return false;
     }
@@ -31,6 +33,17 @@ export function AuthProvider({ children }) {
 
     setSession(nextSession);
     setProfile(currentProfile);
+    if (currentProfile.rol === "admin") {
+      setMfaRequired(true);
+      try {
+        const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        setMfaRequired(Boolean(assuranceError) || assurance?.currentLevel !== "aal2");
+      } catch {
+        setMfaRequired(true);
+      }
+    } else {
+      setMfaRequired(false);
+    }
     setSessionIssue("");
     setLoading(false);
     return true;
@@ -53,6 +66,7 @@ export function AuthProvider({ children }) {
       if (event === "SIGNED_OUT" || !nextSession) {
         setSession(null);
         setProfile(null);
+        setMfaRequired(true);
         setLoading(false);
         if (!intentionalLogout.current) {
           setSessionIssue("La sesión venció. Ingresá nuevamente.");
@@ -60,7 +74,7 @@ export function AuthProvider({ children }) {
         intentionalLogout.current = false;
         return;
       }
-      if (["SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED", "INITIAL_SESSION"].includes(event)) {
+      if (["SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED", "INITIAL_SESSION", "MFA_CHALLENGE_VERIFIED"].includes(event)) {
         queueMicrotask(() => mounted && loadProfile(nextSession));
       }
     });
@@ -94,6 +108,7 @@ export function AuthProvider({ children }) {
     if (error) await supabase.auth.signOut({ scope: "local" });
     setSession(null);
     setProfile(null);
+    setMfaRequired(true);
     setSessionIssue("");
     setLoading(false);
   }, []);
@@ -103,10 +118,11 @@ export function AuthProvider({ children }) {
     profile,
     loading,
     sessionIssue,
+    mfaRequired,
     signIn,
     signOut,
     refreshProfile: () => loadProfile(session),
-  }), [session, profile, loading, sessionIssue, signIn, signOut, loadProfile]);
+  }), [session, profile, loading, sessionIssue, mfaRequired, signIn, signOut, loadProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

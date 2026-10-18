@@ -1,5 +1,22 @@
 # Pruebas locales de Etapa 4
 
+## Ensayo suplementario de respaldo
+
+`node scripts/stage04-restore-drill.mjs` desde la raíz ejecuta sólo Docker
+PostgreSQL sintético sin destino configurable. Verifica snapshot/cifrado,
+restauración, integridad, ACL/RLS y rollback; no sustituye Auth/Edge HTTP ni
+el restore del proveedor. Véase `docs/runbooks/stage-04-backup-continuity.md`.
+
+## Ensayo nuevo Auth real y controles operativos
+
+`node scripts/stage04-auth-security-drill.mjs` usa contenedores locales aislados
+de GoTrue/PostgREST/Edge con cuentas sintéticas y aplica el suplemento
+`20261017000000_security_operations.sql` después de la cadena histórica.
+No acepta destino remoto. La evidencia delimita gateway, proveedor, restauración
+de plataforma y RPO/RTO: no se infieren del resultado PostgreSQL ni de mocks.
+El script de inspección `supabase/inspections/stage04-readonly-preflight.sql`
+es sólo lectura de catálogos/agregados, sin PIN ni secretos; no es una migración.
+
 Estos archivos son destructivos para el esquema donde se ejecutan. Usarlos
 únicamente en PostgreSQL/Supabase local y descartable; nunca contra el proyecto
 remoto.

@@ -2,6 +2,12 @@
 
 ## Estado y alcance
 
+Actualización del 18 de octubre de 2026: el propietario autorizó la aplicación
+real como operación independiente posterior a verificar autenticación,
+RLS y seguridad. Aún no aplicada ni activada; ver
+`../decisions/stage-04-manual-backup-and-color-authorization.md`. La autorización
+no sustituye verificar esquema, integridad, recuperación y frontend compatible.
+
 Este contrato pertenece a la Etapa 3. La migracion
 `supabase/migrations/20261016000000_add_rutinas_color.sql` esta preparada en el
 repositorio, pero **no fue aplicada** a Supabase remoto ni a datos reales.

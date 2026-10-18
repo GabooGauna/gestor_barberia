@@ -1,6 +1,30 @@
 # Runbook de despliegue seguro — Etapa 4
 
-Este documento prepara el despliegue; no autoriza operaciones remotas.
+Checkpoint operativo vigente del 18 de octubre: reutilizar el respaldo cifrado
+`ab70bce0fa53469f8f8659c4564970ba`; TLS, recuperación local de clave y autenticación
+del archivo ya verificadas. Restore PostgreSQL aislado y comparación de conteos,
+UUID/FK y metadatos de roles PASS tras corregir el contexto bootstrap OID 10;
+cleanup confirmado. No equivale a recuperación integral Supabase ni RPO 0.
+No recapturar ni comenzar escrituras remotas mientras falten los demás gates.
+Evidencia y pendientes en `../reviews/stage-04-existing-backup-recovery.md`.
+El propietario es custodio principal y pospone suplente/bóveda/ubicación definitiva;
+no exigir esos trámites para continuar el ensayo local. Esto no demuestra
+recuperación ante pérdida de equipo/usuario. Frontend: Vercel elegido; seguir
+`stage-04-vercel.md` para vincular proyecto y verificar origen HTTPS/variables
+antes de configurar origen y desplegar. El respaldo de
+corte sigue requiriendo suspensión verificable de todos los escritores.
+
+El propietario autorizó el despliegue real el 18 de octubre de 2026,
+condicionado a satisfacer los prerrequisitos antes de cualquier escritura.
+Decisión y riesgo aceptado en `../decisions/stage-04-native-auth-risk-acceptance.md`.
+Estado de ejecución en `../reviews/stage-04-deployment-attempt-2026-10-18.md`.
+Solicitud posterior: respaldo manual cifrado por Session pooler y color
+autorizado como operación independiente sólo después de validar Auth; ver
+`../decisions/stage-04-manual-backup-and-color-authorization.md`. Preparar
+credenciales según `stage-04-secure-db-input.md`; aún no equivale a conectarse,
+respaldar o completar recuperación. Mantener color OFF hasta su checkpoint.
+Si identidad, respaldo, recuperación o configuración no pueden verificarse,
+detener antes de mantenimiento remoto, provisión, migraciones o despliegues.
 
 ## Artefactos y orden
 
@@ -16,7 +40,15 @@ precondición del corte Auth y no se incluye en su cadena de aplicación.
    de los empleados existentes mediante Admin API y RPC administrativa.
 3. `20261016020000_auth_rls_cutover.sql`: preflight, RLS/grants, retención y
    retiro de PIN en una transacción.
-4. Desplegar el cliente Auth. Solo después de verificar color en cada ambiente
+4. Aplicar el suplemento candidato `20261017000000_security_operations.sql`,
+   sólo después de todas las vinculaciones y cutover. Queda maintenance=true.
+   La versión nueva de Edge requiere sus RPC; antes de este paso debe permanecer
+   sin uso administrativo. Seguir `stage-04-security-controls.md` para TOTP,
+   cuotas, drenaje y recuperación. La aprobación local histórica no autoriza
+   aplicar este suplemento a ningún ambiente remoto.
+5. Desplegar el cliente Auth con MFA. Validar enrolamiento y AAL2 antes de abrir
+   negocio mediante `set_security_maintenance(false)` autorizado. Sólo después
+   de verificar color en cada ambiente
    puede habilitarse su flag.
 
 No ejecutar todas las migraciones pendientes ciegamente: entre las fases 1 y
@@ -26,7 +58,11 @@ en staging y luego en el ambiente autorizado.
 ## Preparación y backup
 
 - Activar ventana de mantenimiento y evitar clientes viejos durante el corte.
-- Crear backup consistente de `auth` y `public`, cifrado y con acceso limitado.
+- Crear backup consistente de `auth`, `public` y `private`, con datos,
+  funciones, secuencias, políticas, propietarios y permisos por tabla/columna.
+  Incluir dependencias e historial de migraciones cuando exista. Seguir
+  [respaldo y continuidad](stage-04-backup-continuity.md): cifrado, custodia,
+  inventario de configuración y restauración aislada son obligatorios.
 - Restaurarlo en una base descartable y verificar conteos y FK; un backup sin
   restore drill no satisface el gate.
 - Verificar, sin mostrar valores: roles inválidos, FK/fechas nulas, duplicados
@@ -77,7 +113,11 @@ select public.admin_link_auth_account(
    iniciales por un canal separado y no
    conservarlas; no usar ni consultar el PIN anterior. Esta versión no tiene
    credenciales de un solo uso ni cambio obligatorio en el primer login: los
-   reemplazos se realizan exclusivamente mediante reset administrativo.
+   reemplazos del flujo de producto se realizan mediante reset administrativo.
+   Esto NO impide el cambio propio por la API Auth directa: el propietario
+   aceptó expresamente ese riesgo y conservó Auth nativo el 18 de octubre,
+   según `../decisions/stage-04-native-auth-risk-acceptance.md`. No se muestra
+   una opción de cambio a empleados ni se afirma exclusividad de servidor.
 5. Desactivar explícitamente perfiles que no deban migrarse. Todo perfil que
    permanezca activo debe tener `auth_user_id` y `usuario`.
    Un perfil legacy inactivo sin cuenta se conserva históricamente, pero no
@@ -125,7 +165,17 @@ autorizados; nunca se resuelve el vínculo por nombre visible.
 7. Mantener `VITE_ENABLE_RUTINAS_COLOR=false` hasta verificar esa capacidad de
    forma independiente.
 
+El candidato operativo agrega el checkpoint del suplemento/MFA entre la
+migración cutover y el cliente. No abrir el servicio con sólo el gate histórico.
+
 ## Recuperación
+
+Antes de cualquier rollback, contener también `admin-users` según
+[el procedimiento de continuidad](stage-04-backup-continuity.md#contencion-y-recuperacion).
+El mantenimiento visual y RLS no bloquean su service role. No ejecutar el
+rollback de expand después del cutover ni reaplicar una migración ya confirmada
+como reparación. Toda reparación debe ser un artefacto nuevo versionado,
+ensayado y aprobado, con precondiciones del estado observado.
 
 El rollback de cutover es fail-closed: revoca grants, elimina policies/RPC de
 trabajo y deja RLS habilitado sin acceso. No restaura PIN, cascadas, CRUD anon
@@ -164,5 +214,11 @@ registra sin contraseñas, PIN, tokens ni email técnico.
 
 No declarar producción hasta ejecutar sobre la configuración candidata real:
 lint, build, E2E, prueba SQL, verificación de Auth/RLS/grants, revisión de
-secretos, rate limits y Reviewer independiente. La aplicación remota requiere
-otra autorización explícita.
+secretos, rate limits y Reviewer independiente. La autorización condicional del
+18 de octubre está recibida; su ejecución exige verificar todos los prerrequisitos.
+
+La preparación operativa, decisiones pendientes, controles de abuso, recuperación
+del único administrador y checklist de autorización se detallan en
+`stage-04-backup-continuity.md`. La evidencia suplementaria está en
+`../reviews/stage-04-deployment-preparation.md`. El cierre local anterior se conserva;
+no equivale a aprobar la configuración remota ni iniciar Etapa 5.

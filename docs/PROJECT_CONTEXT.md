@@ -10,6 +10,101 @@
 
 ## Estado local de Etapa 4
 
+Última decisión del 18 de octubre: frontend React en Vercel y backend en
+Supabase. Configuración local preparada en `vercel.json` y `.env.example`;
+procedimiento en `docs/runbooks/stage-04-vercel.md`. Falta vincular proyecto
+Vercel y verificar dominio/variables; no hubo deploy ni cambios de Supabase.
+Esta decisión sustituye la falta de elección de hosting descrita debajo,
+sin levantar los gates de recuperación/configuración/mantenimiento pendientes.
+Lectura adicional acotada: el operador `postgres` no cubre los privilegios de
+SHARE lock en todas las tablas Auth/Storage; no se ejecutaron locks. Falta
+mecanismo de suspensión integral soportado/verificado. Detalle y evidencia
+de preparación en `docs/reviews/stage-04-vercel-preparation.md`.
+
+Estado vigente tras la interrupción del 18 de octubre: TLS ya funciona y existe
+el respaldo preparatorio cifrado `ab70bce0fa53469f8f8659c4564970ba`, fuera del repo;
+NO volver a capturarlo ni repetir ensayos aprobados. Reanudación de restore:
+clave DPAPI/GCM/hashes verificados; se resolvió el fallo de roles conservando
+bootstrap OID 10 con excepción única CREATE documentada. Restore PostgreSQL
+aislado PASS y cleanup confirmado; conteos/UUID/FK y metadatos de roles coinciden
+con observaciones posteriores a captura. No prueba todo Supabase ni RPO 0.
+Propietario es
+custodio principal y pospone suplente/bóveda/ubicación definitiva; no hay hosting.
+GET público Auth confirma signup habilitado; no se cambió configuración.
+Evidencia vigente en `docs/reviews/stage-04-existing-backup-recovery.md`.
+No se aplicaron migraciones ni color. Los estados siguientes son cronología
+anterior y no deben volver a interpretarse como CA/contraseña faltantes.
+
+Checkpoint vigente del 18 de octubre: el propietario guardó la credencial;
+importación DPAPI y ACL verificadas fuera de AppContainer. El intento de conexión
+Session pooler con `verify-full` y raíces del sistema falló antes de autenticar
+por validación TLS; también falló el diagnóstico TLS sin contraseña con confianza
+Windows. Falta aportar la CA oficial descargada del Dashboard. No hubo backup,
+restore ni escrituras de despliegue. Evidencia y paso manual exacto en
+`docs/reviews/stage-04-session-pooler-tls-checkpoint.md`. La contraseña PostgreSQL
+todavía no se pudo validar; no se afirma incorrecta ni se baja el nivel TLS.
+
+Solicitud más reciente del 18 de octubre: contraseña PostgreSQL restablecida
+por el propietario; falta introducirla mediante canal local seguro. Se autoriza
+respaldo manual cifrado por Session pooler y restore aislado. También se autoriza
+`rutinas.color` como operación independiente únicamente después de validar el
+despliegue Auth, con flag OFF hasta verificar esa migración. Decisión vigente:
+`docs/decisions/stage-04-manual-backup-and-color-authorization.md`. No hubo
+backup, restore ni escrituras de despliegue en esta preparación de credenciales.
+Las exclusiones anteriores de color/backup manual quedan actualizadas por esa
+solicitud; los demás requisitos críticos y Etapa 5 permanecen sin cambios.
+
+Último reintento del 18 de octubre: MCP `supabase_barberia`, acotado al ref
+esperado, volvió a responder a esquema/migraciones/Edge/SQL read-only. No hay
+migraciones registradas ni Edge; baseline legacy con seis tablas sin RLS y
+grants anon, sin `private`, vínculo Auth o `rutinas.color`. No se escribió.
+Los GET de respaldo y Auth con el token de Management API siguen en 403 por
+esa ruta distinta; no es fallo de acceso MCP ni de herramientas de cuenta
+deshabilitadas por `project_ref`. Continúa parada antes de escrituras por falta
+de backup/restore integral y configuración/contención verificables. Evidencia
+actual en `docs/reviews/stage-04-mcp-retry-2026-10-18.md`; la autorización
+condicional y el riesgo aceptado siguen vigentes. Lo que sigue es cronología.
+
+Decisión vigente del 18 de octubre de 2026: el propietario conserva Supabase
+Auth nativo, altas/reset administrativos y ninguna opción visible de cambio
+para empleados; acepta expresamente el cambio propio por API directa. El gate
+anterior de exclusividad queda sustituido, no implementado. Decisión en
+`docs/decisions/stage-04-native-auth-risk-acceptance.md`. Autorizó el despliegue
+real CONDICIONADO a verificar los prerrequisitos del runbook; el intento se
+detuvo antes de escribir porque cuatro GET de Management API devolvieron 403.
+La URL local coincide con el ref esperado, pero no verifica acceso/identidad
+remotos. Backup, restore integral, drift/configuración y recuperación del
+ambiente siguen sin certificar. Informe en
+`docs/reviews/stage-04-deployment-attempt-2026-10-18.md`. Sin migraciones,
+cuentas, configuración, Edge o frontend remotos modificados; no push/color/Etapa 5.
+
+Los párrafos siguientes conservan la cronología previa a esa decisión; las
+prohibiciones absolutas de cambio propio y falta de autorización allí descritas
+están sustituidas por la decisión vigente, sin alterar resultados de pruebas.
+
+Reanudación del 18 de octubre de 2026: nuevo foco con reautenticación y
+contraseña actual ON reproduce self-update del empleado (13 assertions de
+reproducción, no cumplimiento). Las 40+10 pruebas anteriores se conservan.
+No se garantiza exclusividad con la arquitectura actual demostrada; alternativas
+previas a implementar en `docs/decisions/stage-04-password-architecture-options.md`.
+Estado y pendientes en `docs/reviews/stage-04-resumption-2026-10-18.md`;
+el bloqueante sigue abierto, sin cambio automático de arquitectura ni remoto.
+
+Suplemento operativo candidato posterior al cierre histórico: cuotas Edge
+persistentes, mantenimiento del servidor y MFA administrativo obligatorio con
+TOTP/AAL2 se implementan localmente en `20261017000000_security_operations.sql`,
+Edge y guard de UI. Contrato y gates en `docs/runbooks/stage-04-security-controls.md`.
+No se aplica al remoto ni se declara validado todo Supabase por el ensayo SQL
+anterior; las evidencias y revisión del candidato se registran por separado.
+Resultados del suplemento: lint/build,11 unitarios,45 E2E y40 assertions Auth
+real locales aprobados; ver `docs/reviews/stage-04-security-controls-validation.md`.
+Reviewer aprueba sólo subcontroles: el propietario confirmó exclusividad
+administrativa de TODO cambio de contraseña y Auth directo todavía permite
+cambio propio. Es BLOQUEANTE abierto documentado en
+`docs/decisions/stage-04-admin-only-passwords.md`; no se declara candidato completo
+aprobado ni staging/producción autorizados. Rate limiting de login Auth del
+gateway, backup/restore proveedor y RPO/RTO integral siguen pendientes.
+
 Al 17 de octubre de 2026, el repositorio local reemplaza el acceso por PIN por
 Supabase Auth con username y contraseña. El username canónico se traduce a un
 email técnico determinista; Supabase conserva las contraseñas. La sesión se
@@ -228,6 +323,19 @@ Estas acciones quedan documentadas, no implementadas en Etapa 2:
 5. Comparar peso total, carga inicial y navegación antes/después; aumentar el límite de advertencia sin reducir bytes no cuenta como optimización.
 
 ## Decisiones y verificaciones pendientes de despliegue
+
+La preparación operativa suplementaria del 17 de octubre está en
+`docs/runbooks/stage-04-backup-continuity.md` y su evidencia delimitada en
+`docs/reviews/stage-04-deployment-preparation.md`. Añade un ensayo Docker de
+backup/restore SQL sintético y procedimientos de continuidad; no cambia los
+contratos aprobados ni valida Auth/Edge/configuración remotos. Los pendientes
+registrados en esa preparación histórica fueron cuotas Edge, MFA/CAPTCHA,
+recuperación HTTP y backup real. El suplemento posterior validó localmente
+cuotas/MFA/recuperación HTTP; estado vigente al inicio de este documento y en
+`docs/reviews/stage-04-security-controls-validation.md`. La configuración remota,
+CAPTCHA y el backup/restore completo del proveedor siguen sin validar.
+Reviewer independiente aprobó únicamente este suplemento local en
+`docs/reviews/stage-04-operational-review.md`; mantiene bloqueado el despliegue.
 
 - Autorizar y ejecutar backup/restore drill sobre staging antes de cualquier
   cambio remoto.

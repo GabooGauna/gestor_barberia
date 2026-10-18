@@ -11,11 +11,33 @@ node_modules
 dist
 dist-ssr
 *.local
+.vercel/
+.env
+.env.*
+!.env.example
 playwright-report/
 test-results/
 blob-report/
 supabase/.temp/
 .tmp-stage4-local/
+
+# Local credentials, certificates and database backup artifacts
+.aws/
+backups/
+*.clixml
+*.dpapi
+*.gbbk
+*.dump
+*.backup
+*.bak
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.p7b
+*.p7c
 
 # Editor directories and files
 .vscode/*

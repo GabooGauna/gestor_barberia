@@ -7,10 +7,10 @@ const TEST_PASSWORD = "ClaveSegura123!";
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const base64Url = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
 
-function jwtFor(authUserId, expiresAt = Math.floor(Date.now() / 1000) + 3600) {
+function jwtFor(authUserId, expiresAt = Math.floor(Date.now() / 1000) + 3600, aal = "aal2") {
   return `${base64Url({ alg: "HS256", typ: "JWT" })}.${base64Url({
     aud: "authenticated", exp: expiresAt, iat: Math.floor(Date.now() / 1000),
-    role: "authenticated", sub: authUserId,
+    role: "authenticated", sub: authUserId, aal,
   })}.playwright-signature`;
 }
 
@@ -24,10 +24,12 @@ function authUser(authUserId, username) {
   };
 }
 
-function sessionFor(user, { expired = false } = {}) {
+// Existing business fixtures represent a session already upgraded by MFA.
+// MFA-specific tests explicitly use aal1 and exercise challenge/verification.
+function sessionFor(user, { expired = false, aal = "aal2" } = {}) {
   const expiresAt = Math.floor(Date.now() / 1000) + (expired ? -120 : 3600);
   return {
-    access_token: jwtFor(user.id, expiresAt),
+    access_token: jwtFor(user.id, expiresAt, aal),
     refresh_token: expired ? "expired-refresh-token" : `refresh-${user.id}`,
     expires_in: 3600, expires_at: expiresAt, token_type: "bearer", user,
   };
@@ -66,7 +68,7 @@ class SupabaseMock {
 
   setTable(table, rows) { this.tables.set(table, clone(rows)); }
 
-  registerUser(profile, { password = TEST_PASSWORD, authUserId } = {}) {
+  registerUser(profile, { password = TEST_PASSWORD, authUserId, aal = "aal2" } = {}) {
     const authId = authUserId || profile.auth_user_id || profile.id;
     const normalized = {
       activo: true, usuario: profile.usuario || profile.nombre.toLowerCase(),
@@ -74,7 +76,7 @@ class SupabaseMock {
     };
     const user = authUser(authId, normalized.usuario);
     this.users.set(authId, { profile: normalized, user });
-    this.credentials.set(normalized.usuario, { password, authUserId: authId });
+    this.credentials.set(normalized.usuario, { password, authUserId: authId, aal });
     const employees = this.tables.get("empleados") || [];
     if (!employees.some(({ id }) => id === normalized.id)) this.tables.set("empleados", [...employees, normalized]);
     return { profile: normalized, user };
@@ -109,7 +111,7 @@ class SupabaseMock {
       if (!credential || credential.password !== body?.password || !record?.profile.activo) {
         await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "invalid_grant", error_description: "Invalid login credentials" }) }); return;
       }
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(sessionFor(record.user)) }); return;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(sessionFor(record.user, { aal: credential.aal })) }); return;
     }
     if (url.pathname === "/auth/v1/token" && url.searchParams.get("grant_type") === "refresh_token") {
       if (body?.refresh_token === "expired-refresh-token") {

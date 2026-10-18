@@ -99,8 +99,65 @@ claves llamadas `password`, `pin`, `token`, `email` o `technical_email`.
 
 Los access tokens ya emitidos pueden vivir hasta su expiración, pero la
 desactivación corta acceso a datos inmediatamente porque cada helper RLS exige
-`empleados.activo=true`. Para administradores se recomienda MFA/AAL2 en la
-configuración desplegada.
+`empleados.activo=true`. El suplemento candidato siguiente convierte MFA/AAL2
+administrativo en obligatorio; su despliegue requiere aprobación separada.
+
+## Suplemento operativo candidato — 17 de octubre de 2026
+
+Implementación y pruebas locales autorizadas históricamente. El 18 de octubre
+el propietario autorizó el despliegue real de forma condicional a los gates del
+runbook. Conserva contraseñas administradas y entrega privada, con la aceptación
+explícita de cambio propio por API descrita debajo; no acredita por sí mismo
+verificación remota ni permite omitir prerrequisitos.
+
+- La migración nueva `20261017000000_security_operations.sql` se aplica DESPUÉS
+  de expand, bootstrap/vínculos y cutover. No modifica archivos ya aprobados ni
+  depende de color. Instala mantenimiento cerrado inicialmente.
+- Administradores necesitan JWT de Auth `aal2` para TODO negocio. Los helpers
+  RLS niegan también que un admin AAL1 actúe por las policies de empleado.
+  `get_current_employee_profile` devuelve sólo el perfil mínimo para permitir
+  enrolamiento/desafío antes de abrir el panel; no concede acceso operativo.
+  El frontend usa TOTP enroll/challenge/verify y guarda QR/código sólo en memoria.
+  No se implementa bypass de MFA en emergencia.
+- Edge verifica JWT mediante Auth y consulta AAL del mismo bearer validado;
+  exige admin activo y AAL2, incluido en solicitudes sin Origin. Un estado
+  visual, metadata o claims sin verificar no reemplaza esto.
+- Admisión service_role `admin_begin_operation(actor,action,target_key)` atómica
+  en PostgreSQL: actor 10/60 s y burst 3/10 s; altas/reset mismo objetivo
+  3/15 min por acción, compartido entre actores. Objetivo usa SHA-256 del usuario
+  canónico para alta o UUID para otras operaciones, sin guardar credenciales.
+  Digest no equivale a anonimización; la tabla privada tiene acceso restringido.
+  Respuesta 429 con Retry-After antes de auditoría/efectos; dependencia caída
+  produce 503 cerrado. Sin contadores en memoria ni dependencia de CORS.
+- `admin_finish_operation` termina la admisión; errores Auth/transportes ambiguos
+  conservan lease pendiente hasta reconciliación. No expira por tiempo. El
+  mantenimiento con `set_security_maintenance(true)` impide admisiones nuevas,
+  deniega negocio por RLS y bloquea escrituras en seis tablas incluso por
+  service_role mediante triggers. Drena transacciones SQL anteriores y reporta
+  `in_flight`; el operador debe esperar cero y verificar fuentes externas.
+- Los propietarios SQL y service_role siguen siendo confianza privilegiada:
+  RPC de bootstrap/admin offline no prueban AAL de usuario. No se exponen al
+  navegador ni se usan para eludir Edge. Auth directo, jobs y DDL requieren
+  contención adicional para certificar suspensión completa y RPO 0.
+- Acceso JWT AAL2 ya emitido puede sobrevivir a reset/logout/eliminación de
+  factores. En emergencia mantener mantenimiento hasta comprobar rechazo o
+  expiración de todos los tokens anteriores en Auth, REST y Edge, contemplando
+  tolerancias de cada verificador; después volver a enrolar TOTP y
+  comprobar AAL2 con la misma identidad/perfil. Ver runbook suplementario.
+
+La evidencia y dictamen nuevos se registran aparte de la aprobación histórica.
+CAPTCHA se evalúa; no se activa sin integración de token/challenge en login.
+
+Decisión vigente del propietario, 18 de octubre de 2026: administrador crea
+cuentas y asigna/restablece contraseñas; no hay opción visible de cambio para
+empleados. Se conserva Supabase Auth nativo y se acepta expresamente que un
+empleado autenticado pueda cambiar su contraseña por la API directa. Ese cambio
+no pasa por `admin-users` ni su auditoría; ocultar UI no es una prohibición de
+servidor. Se sustituye el requisito previo de exclusividad, sin implementar otro
+proveedor ni controles adicionales para impedirlo. Ver
+`docs/decisions/stage-04-native-auth-risk-acceptance.md`. La autorización de
+despliegue es condicional a verificar los restantes gates operativos, no a
+implementar exclusividad. La evidencia histórica se conserva sin repetirla.
 
 ## Retención mínima
 

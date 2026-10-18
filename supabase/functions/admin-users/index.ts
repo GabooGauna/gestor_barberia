@@ -25,7 +25,7 @@ const SUPABASE_SERVICE_ROLE_KEY =
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ALLOWED_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") ?? "";
 
-function response(origin: string, status: number, body: Record<string, unknown>) {
+function response(origin: string, status: number, body: Record<string, unknown>, retryAfter?: number) {
   return new Response(status === 204 ? null : JSON.stringify(body), {
     status,
     headers: {
@@ -35,6 +35,8 @@ function response(origin: string, status: number, body: Record<string, unknown>)
       "access-control-allow-headers": "authorization, content-type, apikey, x-client-info",
       "access-control-allow-methods": "POST, OPTIONS",
       vary: "Origin",
+      "access-control-expose-headers": "Retry-After",
+      ...(retryAfter ? { "retry-after": String(retryAfter) } : {}),
     },
   });
 }
@@ -111,6 +113,17 @@ Deno.serve(async (request) => {
   }
 
   const actorAuthUserId = userData.user.id;
+  // Passing the same bearer explicitly makes Auth validate it again; do not
+  // infer AAL from metadata, a browser flag or an unverified decoded payload.
+  try {
+    const { data: assurance, error: assuranceError } = await userClient.auth.mfa
+      .getAuthenticatorAssuranceLevel(authorization.slice(7));
+    if (assuranceError || assurance?.currentLevel !== "aal2") {
+      return response(corsOrigin, 403, { error: "mfa_required" });
+    }
+  } catch {
+    return response(corsOrigin, 503, { error: "security_controls_unavailable" });
+  }
   const { data: actor, error: actorError } = await serviceClient
     .from("empleados")
     .select("id, rol, activo")
@@ -132,6 +145,46 @@ Deno.serve(async (request) => {
     return response(corsOrigin, 400, { error: "invalid_request" });
   }
 
+  if (!["create", "reset_password", "deactivate", "reactivate", "change_role"].includes(payload?.action)) {
+    return response(corsOrigin, 400, { error: "invalid_action" });
+  }
+  let targetKey: string;
+  try {
+    const target = payload.action === "create"
+      ? canonicalUsername(payload.username)
+      : payload.employeeId.toLowerCase();
+    const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(target));
+    targetKey = Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return response(corsOrigin, 400, { error: "invalid_request" });
+  }
+
+  // Admission is persistent and atomic in PostgreSQL, before Auth mutation or
+  // audit writes. RPC failure is fail-closed; CORS is not the abuse control.
+  let operationId: string;
+  try {
+    const { data: admission, error } = await serviceClient.rpc("admin_begin_operation", {
+      p_actor_auth_user_id: actorAuthUserId,
+      p_action: payload.action,
+      p_target_key: targetKey,
+    });
+    if (error || !admission || typeof admission.allowed !== "boolean") {
+      return response(corsOrigin, 503, { error: "security_controls_unavailable" });
+    }
+    if (!admission.allowed) {
+      const limited = admission.error === "rate_limited";
+      return response(corsOrigin, limited ? 429 : 503,
+        { error: limited ? "rate_limited" : "maintenance_active" },
+        Math.max(1, Math.min(900, Number(admission.retry_after) || 60)));
+    }
+    if (!validUuid(admission.operation_id)) {
+      return response(corsOrigin, 503, { error: "security_controls_unavailable" });
+    }
+    operationId = admission.operation_id;
+  } catch {
+    return response(corsOrigin, 503, { error: "security_controls_unavailable" });
+  }
+
   const recordOperation = async (employeeId: string, action: string) => {
     const { error } = await serviceClient.rpc("admin_record_auth_operation", {
       p_actor_auth_user_id: actorAuthUserId,
@@ -141,6 +194,21 @@ Deno.serve(async (request) => {
     if (error) console.error("admin-users audit event failed", action, error.code);
     return !error;
   };
+
+  let reconciliationRequired = false;
+  async function authMutation<T extends { error: unknown }>(operation: () => Promise<T>): Promise<T> {
+    try {
+      const result = await operation();
+      // Any Auth error is conservative: the operator must prove the remote
+      // request stopped before clearing this durable lease. A timeout does not
+      // prove that the provider stopped processing a password/account mutation.
+      if (result.error) reconciliationRequired = true;
+      return result;
+    } catch (error) {
+      reconciliationRequired = true;
+      throw error;
+    }
+  }
 
   try {
     if (payload.action === "create") {
@@ -157,23 +225,24 @@ Deno.serve(async (request) => {
       }
 
       const { data: created, error: createError } =
-        await serviceClient.auth.admin.createUser({
+        await authMutation(() => serviceClient.auth.admin.createUser({
           email: technicalAuthEmail(username),
           password,
           email_confirm: true,
-        });
+        }));
       if (createError || !created.user) {
         await recordOperation(employeeId, "account_create_auth_failed");
         console.error("admin-users create auth failed", createError?.code);
         return response(corsOrigin, 409, { error: "account_not_available" });
       }
+      const createdAuthUserId = created.user.id;
 
       const { error: profileError } = await serviceClient.rpc(
         "admin_create_employee_account",
         {
           p_actor_auth_user_id: actorAuthUserId,
           p_target_empleado_id: employeeId,
-          p_auth_user_id: created.user.id,
+          p_auth_user_id: createdAuthUserId,
           p_nombre: name,
           p_usuario: username,
           p_role: payload.role,
@@ -182,7 +251,7 @@ Deno.serve(async (request) => {
 
       if (profileError) {
         const { error: compensationError } =
-          await serviceClient.auth.admin.deleteUser(created.user.id);
+          await authMutation(() => serviceClient.auth.admin.deleteUser(createdAuthUserId));
         await recordOperation(
           employeeId,
           compensationError
@@ -214,10 +283,10 @@ Deno.serve(async (request) => {
       if (!await recordOperation(payload.employeeId, "password_reset_started")) {
         return response(corsOrigin, 503, { error: "audit_unavailable" });
       }
-      const { error } = await serviceClient.auth.admin.updateUserById(
+      const { error } = await authMutation(() => serviceClient.auth.admin.updateUserById(
         target.auth_user_id,
         { password },
-      );
+      ));
       if (error) {
         await recordOperation(payload.employeeId, "password_reset_failed");
         throw error;
@@ -257,10 +326,10 @@ Deno.serve(async (request) => {
       );
       if (stateError) throw stateError;
 
-      const { error: banError } = await serviceClient.auth.admin.updateUserById(
+      const { error: banError } = await authMutation(() => serviceClient.auth.admin.updateUserById(
         target.auth_user_id,
         { ban_duration: "876000h" },
-      );
+      ));
       if (banError) {
         await recordOperation(
           payload.employeeId,
@@ -276,10 +345,10 @@ Deno.serve(async (request) => {
         return response(corsOrigin, 409, { error: "account_already_active" });
       }
 
-      const { error: unbanError } = await serviceClient.auth.admin.updateUserById(
+      const { error: unbanError } = await authMutation(() => serviceClient.auth.admin.updateUserById(
         target.auth_user_id,
         { ban_duration: "none" },
-      );
+      ));
       if (unbanError) throw unbanError;
 
       const { error: stateError } = await serviceClient.rpc(
@@ -290,9 +359,9 @@ Deno.serve(async (request) => {
         },
       );
       if (stateError) {
-        await serviceClient.auth.admin.updateUserById(target.auth_user_id, {
+        await authMutation(() => serviceClient.auth.admin.updateUserById(target.auth_user_id, {
           ban_duration: "876000h",
-        });
+        }));
         await recordOperation(payload.employeeId, "account_reactivation_failed");
         return response(corsOrigin, 409, { error: "operation_failed" });
       }
@@ -319,5 +388,20 @@ Deno.serve(async (request) => {
     return response(corsOrigin, code.startsWith("invalid_") ? 400 : 409, {
       error: code,
     });
+  } finally {
+    // An unresolved lease deliberately blocks a maintenance checkpoint. It is
+    // never assumed safe merely because a timeout or isolate restart elapsed.
+    try {
+      if (reconciliationRequired) {
+        console.error("admin-users admission requires Auth reconciliation");
+      } else {
+        const { error } = await serviceClient.rpc("admin_finish_operation", {
+          p_operation_id: operationId,
+        });
+        if (error) console.error("admin-users admission requires reconciliation");
+      }
+    } catch {
+      console.error("admin-users admission requires reconciliation");
+    }
   }
 });

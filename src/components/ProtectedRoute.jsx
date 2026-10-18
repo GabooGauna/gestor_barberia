@@ -1,9 +1,10 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import AdminMfa from "./AdminMfa";
 
 export default function ProtectedRoute({ children }) {
   const location = useLocation();
-  const { session, profile, loading } = useAuth();
+  const { session, profile, loading, mfaRequired } = useAuth();
 
   if (loading) {
     return (
@@ -16,6 +17,8 @@ export default function ProtectedRoute({ children }) {
   if (!session || !profile) {
     return <Navigate to="/" replace state={{ from: location.pathname }} />;
   }
+
+  if (profile.rol === "admin" && mfaRequired) return <AdminMfa />;
 
   return children;
 }

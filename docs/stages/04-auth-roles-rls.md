@@ -2,6 +2,37 @@
 
 ## Estado
 
+Checkpoint vigente del 18 de octubre: credencial/CA/TLS resueltos; respaldo
+preparatorio existente cifrado, clave recuperada y restore PostgreSQL aislado
+PASS con comparación delimitada de conteos/UUID/FK y roles. No se recaptura ni
+se repiten pruebas aprobadas. No es recuperación integral Supabase ni backup
+de corte con RPO 0. Custodio principal propietario, suplente/bóveda/ubicación
+definitiva pospuestos; frontend con destino Vercel elegido, aún sin proyecto/
+dominio verificados (`../runbooks/stage-04-vercel.md`). No se aplicaron migraciones ni
+otros cambios remotos. Evidencia en
+`../reviews/stage-04-existing-backup-recovery.md`. Lo siguiente es cronología.
+
+Solicitud posterior del propietario: respaldo manual cifrado fuera del repo
+por Session pooler, con captura local segura de contraseña todavía pendiente.
+Autoriza color de manera independiente sólo tras validar autenticación real;
+no se aplicó ni activó. Decisión vigente y límites en
+`../decisions/stage-04-manual-backup-and-color-authorization.md`.
+
+Reintento posterior del 18 de octubre: lecturas MCP recuperadas; baseline
+legacy verificado, sin migraciones ni Edge registradas y sin RLS activo.
+Despliegue detenido antes de escrituras por gates de respaldo/restore integral
+y configuración/contención no verificados. Los 403 de Management API para
+backup/Auth no representan un fallo del MCP de proyecto. Estado vigente en
+`../reviews/stage-04-mcp-retry-2026-10-18.md`; cronología anterior debajo.
+
+Actualización operativa del 18 de octubre de 2026: el propietario acepta el
+cambio propio por API directa y conserva Auth nativo, según
+`../decisions/stage-04-native-auth-risk-acceptance.md`. Autoriza despliegue real
+condicional a los gates del runbook. La ejecución se detuvo antes de escrituras
+por acceso de gestión HTTP 403 y prerrequisitos no verificados; ver
+`../reviews/stage-04-deployment-attempt-2026-10-18.md`. No es un cierre remoto
+ni habilitación de producción. El estado local histórico siguiente se conserva.
+
 **Cerrada localmente el 17 de octubre de 2026.** Backend y Frontend entregados;
 Tester y Reviewer independiente aprobaron sus gates. No quedan hallazgos
 bloqueantes o altos abiertos en el alcance local revisado.

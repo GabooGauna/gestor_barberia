@@ -15,6 +15,20 @@ No usar prefijo `VITE_` para secretos. Desplegar con verificación JWT habilitad
 La función vuelve a verificar el token con `auth.getUser()` y consulta el rol
 activo en `public.empleados`; no confía en metadata ni en el payload.
 
+## Suplemento operativo candidato
+
+Requiere `20261017000000_security_operations.sql` después del cutover y JWT
+AAL2 validado por Auth. `admin_begin_operation` impone cuotas persistentes
+distribuidas antes de efectos y devuelve 429/Retry-After; error del control o
+mantenimiento cerrado devuelve 503. Incluye solicitudes sin Origin.
+
+El suplemento inicia maintenance=true. Sólo el operador privilegiado puede
+abrirlo/cerrarlo con `set_security_maintenance`; al cerrar debe esperar y
+reconciliar in_flight=0. Errores Auth o transporte conservan lease pendiente,
+sin TTL que suponga terminación. El cierre de negocio no congela Auth directo:
+ver `docs/runbooks/stage-04-security-controls.md` para RPO0 y recuperación MFA.
+La implementación es candidata local, no está desplegada ni autorizada remotamente.
+
 ## Acciones `POST`
 
 - `create`: `name`, `username`, `password`, `role`.
