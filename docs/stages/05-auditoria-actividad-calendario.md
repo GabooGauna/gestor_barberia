@@ -4,6 +4,29 @@
 
 Transformar la auditoría en experiencia trazable/escalable con actividad reciente, filtros, historial visual y calendario secundario.
 
+## Intervención acotada autorizada — 20 de octubre de 2026
+
+El propietario confirma Etapa 4 desplegada/aprobada y autoriza únicamente
+corregir el reinicio diario y sumar indicadores al calendario existente,
+incluido commit/push para Vercel. No se repiten auditorías de Etapa 4 ni se
+declara completada toda Etapa 5. Filtros avanzados y actividad incremental del
+roadmap general quedan fuera de esta intervención.
+
+Contrato: `empleado_rutinas` configura rutinas permanentes sin fecha; no es
+evidencia de asignación histórica diaria. `tareas_urgentes.fecha` delimita una
+asignación puntual y `auditoria_diaria.fecha` un cumplimiento real (incluida su
+anulación). No existe snapshot de pendientes de rutinas por fecha: no se
+reconstruye ni se inventa. Calendario y detalle usan registros diarios reales,
+incluyen cancelaciones/anulaciones y nunca proyectan la configuración actual
+sobre fechas históricas. El empleado conserva sus rutinas y consulta únicamente
+el cumplimiento y las urgencias de hoy en `America/Argentina/Buenos_Aires`.
+
+Retención: sin borrados, migraciones ni escrituras de inicialización diaria.
+Visibilidad y RPC siguen bajo Auth/RLS existente. Tester debe comprobar
+medianoche argentina frente a UTC, pestaña abierta/reanudada, recarga, consultas
+mensuales, indicadores, selección, estados y ausencia de escrituras ficticias.
+Reviewer independiente revisará después de las validaciones.
+
 ## Dependencias
 
 Etapa 4 aprobada y política de retención, corrección, visibilidad y zona horaria definida.

@@ -10,6 +10,15 @@
 
 ## Estado local de Etapa 4
 
+Intervención posterior solicitada el 20 de octubre: reinicio diario de tareas y
+calendario con indicadores, acotados al alcance autorizado en
+`docs/stages/05-auditoria-actividad-calendario.md`. Etapa 4 se conserva aprobada;
+no se repite su auditoría ni se modifica Supabase. El frontend separa
+configuración permanente (`empleado_rutinas`) de registros por fecha
+(`auditoria_diaria`/`tareas_urgentes`), renueva el día argentino automáticamente
+y consulta sólo registros reales en el calendario. Decisiones y validación en
+`docs/reviews/daily-audit-calendar.md`. No implica cierre completo de Etapa 5.
+
 Checkpoint vigente del 20 de octubre: desplegados y aceptados Auth/RLS/MFA,
 Edge admin-users y colores de rutinas en el proyecto Supabase existente.
 Frontend publicado mediante GitHub–Vercel: `c03511e` Auth y `cc8a40d` colores;

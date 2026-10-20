@@ -1,414 +1,217 @@
-// src/components/CalendarioAuditoria.jsx
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../services/supabase";
-import { currentBusinessDate } from "../utils/businessDate";
+import { useBusinessDate } from "../hooks/useBusinessDate";
+
+const PAGE_SIZE = 500;
+
+// Date-bounded queries still paginate: Supabase may cap each response.
+async function readPages(createQuery, signal) {
+  const rows = [];
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const { data, error } = await createQuery()
+      .order("id")
+      .range(offset, offset + PAGE_SIZE - 1)
+      .abortSignal(signal);
+    if (error) throw error;
+    if (signal.aborted) return [];
+    rows.push(...(data || []));
+    if (!data || data.length < PAGE_SIZE) return rows;
+  }
+}
+
+function shiftMonth(month, amount) {
+  const [year, number] = month.split("-").map(Number);
+  const date = new Date(Date.UTC(year, number - 1 + amount, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function displayDate(date) {
+  return date.split("-").reverse().join("/");
+}
+
+function groupRecords(audits, urgentTasks) {
+  const employees = new Map();
+  const add = (record, task) => {
+    if (!employees.has(record.empleado_id)) {
+      employees.set(record.empleado_id, {
+        id: record.empleado_id,
+        nombre: record.empleados?.nombre || "Integrante sin nombre disponible",
+        tasks: [],
+      });
+    }
+    employees.get(record.empleado_id).tasks.push(task);
+  };
+  audits.forEach((record) => add(record, {
+    id: `audit-${record.id}`,
+    description: record.tareas_rutina?.descripcion || "Tarea sin descripción disponible",
+    routine: record.tareas_rutina?.rutinas?.titulo || "Rutina",
+    section: record.tareas_rutina?.seccion,
+    status: record.anulada_en ? "Anulado" : "Completado ✓",
+    completed: !record.anulada_en,
+    inactive: Boolean(record.anulada_en),
+  }));
+  urgentTasks.forEach((record) => add(record, {
+    id: `urgent-${record.id}`,
+    urgentId: record.id,
+    description: record.descripcion,
+    routine: "Tareas Urgentes / Extraordinarias",
+    status: record.cancelada_en ? "Cancelada" : record.completada ? "Completado ✓" : "Pendiente ⏳",
+    completed: !record.cancelada_en && record.completada,
+    inactive: Boolean(record.cancelada_en),
+  }));
+  return [...employees.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+}
 
 export default function CalendarioAuditoria() {
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(
-    currentBusinessDate(),
-  );
-  const [datosAuditoriaEmpleados, setDatosAuditoriaEmpleados] = useState([]);
-  const [cargando, setCargando] = useState(false);
-  const [desplegados, setDesplegados] = useState({});
-
-  const cargarDatosAuditoria = useCallback(async () => {
-    try {
-      setCargando(true);
-
-      // 1. Cargamos empleados
-      const { data: empleados, error: errEmp } = await supabase
-        .from("empleados")
-        .select("id, nombre, rol")
-        .order("nombre");
-
-      if (errEmp) throw errEmp;
-
-      // 2. Cargamos asignaciones de rutinas
-      const { data: asignaciones, error: errAsig } = await supabase
-        .from("empleado_rutinas")
-        .select("empleado_id, rutina_id");
-
-      if (errAsig) throw errAsig;
-
-      // 3. Cargamos rutinas y tareas
-      const { data: rutinas, error: errRut } = await supabase.from("rutinas")
-        .select(`
-          id,
-          titulo,
-          tareas_rutina (
-            id,
-            seccion,
-            descripcion,
-            orden
-          )
-        `);
-
-      if (errRut) throw errRut;
-
-      const mapaRutinas = {};
-      rutinas?.forEach((r) => {
-        mapaRutinas[r.id] = r;
-      });
-
-      // 4. Cargamos auditoría diaria de rutinas
-      const { data: auditoriaDia, error: errAud } = await supabase
-        .from("auditoria_diaria")
-        .select("tarea_id, empleado_id")
-        .eq("fecha", fechaSeleccionada)
-        .is("anulada_en", null);
-
-      if (errAud) throw errAud;
-
-      // 5. Cargamos tareas urgentes de la fecha seleccionada
-      const { data: tareasUrgentesDia, error: errUrg } = await supabase
-        .from("tareas_urgentes")
-        .select("id, empleado_id, descripcion, completada")
-        .eq("fecha", fechaSeleccionada)
-        .is("cancelada_en", null);
-
-      if (errUrg) throw errUrg;
-
-      const reporteProcesado = empleados.map((emp) => {
-        const rutinasDelEmpIds =
-          asignaciones
-            ?.filter((a) => a.empleado_id === emp.id)
-            .map((a) => a.rutina_id) || [];
-        const rutinasAsignadasDetalle = rutinasDelEmpIds
-          .map((rutinaId) => mapaRutinas[rutinaId])
-          .filter(Boolean);
-        const hechasPorEmpIds =
-          auditoriaDia
-            ?.filter((a) => a.empleado_id === emp.id)
-            .map((a) => a.tarea_id) || [];
-
-        let totalAsignadas = 0;
-        let cantidadHechas = 0;
-
-        // Rutinas normales y sus tareas
-        const rutinasConEstado = rutinasAsignadasDetalle.map((rutina) => {
-          const tareasConEstado = (rutina.tareas_rutina || [])
-            .sort((a, b) => a.orden - b.orden)
-            .map((tarea) => {
-              totalAsignadas++;
-              const completada = hechasPorEmpIds.includes(tarea.id);
-              if (completada) cantidadHechas++;
-              return { ...tarea, completada };
-            });
-
-          return {
-            ...rutina,
-            tareas: tareasConEstado,
-          };
-        });
-
-        // Tareas urgentes de este empleado en esta fecha
-        const urgentesDelEmp =
-          tareasUrgentesDia?.filter((u) => u.empleado_id === emp.id) || [];
-        const urgentesConEstado = urgentesDelEmp.map((urg) => {
-          totalAsignadas++;
-          if (urg.completada) cantidadHechas++;
-          return {
-            id: urg.id,
-            seccion: "⚠️ URGENTE",
-            descripcion: urg.descripcion,
-            completada: urg.completada,
-            esUrgente: true,
-          };
-        });
-
-        const porcentaje =
-          totalAsignadas > 0
-            ? Math.round((cantidadHechas / totalAsignadas) * 100)
-            : 0;
-
-        return {
-          ...emp,
-          totalAsignadas,
-          cantidadHechas,
-          porcentaje,
-          rutinasConEstado,
-          urgentesConEstado,
-        };
-      });
-
-      setDatosAuditoriaEmpleados(reporteProcesado);
-    } catch (err) {
-      console.error("Error al calcular auditoría detallada:", err);
-    } finally {
-      setCargando(false);
-    }
-  }, [fechaSeleccionada]);
+  const today = useBusinessDate();
+  // null follows Argentina's current day; an explicit selection stays historical.
+  const [selectedDate, setSelectedDate] = useState(null);
+  const date = selectedDate || today;
+  const month = date.slice(0, 7);
+  const [monthResult, setMonthResult] = useState({ month: "", dates: [], loading: true, error: false });
+  const [dayResult, setDayResult] = useState({ date: "", employees: [], loading: true, error: false });
+  const [expanded, setExpanded] = useState({});
+  const [reload, setReload] = useState(0);
+  const [cancelling, setCancelling] = useState("");
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
-    queueMicrotask(cargarDatosAuditoria);
-  }, [cargarDatosAuditoria]);
+    const controller = new AbortController();
+    async function load() {
+      try {
+        const first = `${month}-01`;
+        const next = `${shiftMonth(month, 1)}-01`;
+        const [audits, urgentTasks] = await Promise.all([
+          readPages(() => supabase.from("auditoria_diaria").select("id,fecha").gte("fecha", first).lt("fecha", next), controller.signal),
+          readPages(() => supabase.from("tareas_urgentes").select("id,fecha").gte("fecha", first).lt("fecha", next), controller.signal),
+        ]);
+        if (!controller.signal.aborted) setMonthResult({ month, dates: [...new Set([...audits, ...urgentTasks].map((r) => r.fecha))], loading: false, error: false });
+      } catch {
+        if (!controller.signal.aborted) setMonthResult({ month, dates: [], loading: false, error: true });
+      }
+    }
+    queueMicrotask(load);
+    return () => controller.abort();
+  }, [month, today, reload]);
 
-  const toggleDesplegar = (empleadoId) => {
-    setDesplegados((prev) => ({
-      ...prev,
-      [empleadoId]: !prev[empleadoId],
-    }));
+  useEffect(() => {
+    const controller = new AbortController();
+    async function load() {
+      try {
+        const [audits, urgentTasks] = await Promise.all([
+          readPages(() => supabase.from("auditoria_diaria")
+            .select("id,tarea_id,empleado_id,anulada_en,empleados(id,nombre,rol),tareas_rutina(id,seccion,descripcion,rutinas(id,titulo))")
+            .eq("fecha", date), controller.signal),
+          readPages(() => supabase.from("tareas_urgentes")
+            .select("id,empleado_id,descripcion,completada,cancelada_en,empleados(id,nombre,rol)")
+            .eq("fecha", date), controller.signal),
+        ]);
+        if (!controller.signal.aborted) setDayResult({ date, employees: groupRecords(audits, urgentTasks), loading: false, error: false });
+      } catch {
+        if (!controller.signal.aborted) setDayResult({ date, employees: [], loading: false, error: true });
+      }
+    }
+    queueMicrotask(load);
+    return () => controller.abort();
+  }, [date, reload]);
+
+  const selectDate = (value) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+    setSelectedDate(value === today ? null : value);
+    setActionError("");
   };
-
-  // Una urgencia se cancela sin borrar su historia.
-  const cancelarTareaUrgente = async (urgenteId) => {
+  const cancelUrgentTask = async (id) => {
     if (!confirm("¿Cancelar esta tarea urgente? El registro se conservará en la auditoría.")) return;
-
+    setCancelling(id);
+    setActionError("");
     try {
-      const { error } = await supabase.rpc("cancel_urgent_task", {
-        p_urgent_id: urgenteId,
-      });
-
+      const { error } = await supabase.rpc("cancel_urgent_task", { p_urgent_id: id });
       if (error) throw error;
-      cargarDatosAuditoria(); // Recargamos los datos para actualizar la vista
-    } catch (err) {
-      console.error("Error al cancelar tarea urgente:", err);
-      alert("No se pudo cancelar la tarea urgente.");
+      setDayResult((previous) => ({ ...previous, loading: true }));
+      setReload((value) => value + 1);
+    } catch {
+      setActionError("No se pudo cancelar la tarea urgente. Volvé a intentarlo.");
+    } finally {
+      setCancelling("");
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Cabecera del Módulo y Selector de Fecha */}
-      <div className="bg-white p-6 rounded-xl shadow flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-800">
-            Calendario Operativo y Auditoría
-          </h2>
-          <p className="text-sm text-gray-500">
-            Revisa el cumplimiento de tareas y urgencias del equipo por día.
-          </p>
-        </div>
+  const [year, monthNumber] = month.split("-").map(Number);
+  const firstWeekday = (new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay() + 6) % 7;
+  const days = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  const monthTitle = new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month}-01T12:00:00Z`));
+  const monthReady = monthResult.month === month && !monthResult.loading;
+  const dayReady = dayResult.date === date && !dayResult.loading;
 
-        <div className="flex items-center gap-2">
-          <label htmlFor="audit-date" className="text-sm font-medium text-gray-600">
-            Seleccionar fecha:
-          </label>
-          <input
-            id="audit-date"
-            type="date"
-            value={fechaSeleccionada}
-            onChange={(e) => setFechaSeleccionada(e.target.value)}
-            className="p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 font-medium text-gray-700 bg-gray-50"
-          />
+  return (
+    <div className="audit-view">
+      <div className="audit-header">
+        <div>
+          <h2 className="text-xl font-bold">Calendario Operativo y Auditoría</h2>
+          <p>Revisá las tareas y el cumplimiento registrados para cada día.</p>
+        </div>
+        <div className="audit-date-control">
+          <label htmlFor="audit-date">Seleccionar fecha:</label>
+          <input id="audit-date" type="date" value={date} onChange={(event) => selectDate(event.target.value)} />
+          <button className="button button--secondary" onClick={() => selectDate(today)}>Hoy</button>
         </div>
       </div>
 
-      {/* Reporte por Empleado */}
-      {cargando ? (
-        <div className="bg-white p-12 rounded-xl shadow text-center text-gray-400">
-          Cargando registros...
+      <section className="audit-calendar" aria-label="Calendario de asignaciones">
+        <div className="audit-calendar-nav">
+          <button className="button button--secondary" aria-label="Mes anterior" onClick={() => selectDate(`${shiftMonth(month, -1)}-01`)}>‹</button>
+          <h3>{monthTitle}</h3>
+          <button className="button button--secondary" aria-label="Mes siguiente" onClick={() => selectDate(`${shiftMonth(month, 1)}-01`)}>›</button>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {datosAuditoriaEmpleados.map((emp) => {
-            const estaAbierto = desplegados[emp.id];
+        <div className="audit-calendar-grid">
+          {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((day) => <span className="audit-weekday" key={day} aria-hidden="true">{day}</span>)}
+          {Array.from({ length: firstWeekday }, (_, index) => <span key={`blank-${index}`} aria-hidden="true" />)}
+          {Array.from({ length: days }, (_, index) => {
+            const day = `${month}-${String(index + 1).padStart(2, "0")}`;
+            const hasAssignments = monthReady && !monthResult.error && monthResult.dates.includes(day);
+            const label = !monthReady || monthResult.error ? "asignaciones sin verificar" : hasAssignments ? "con asignaciones" : "sin asignaciones";
             return (
-              <div
-                key={emp.id}
-                className="bg-white p-6 rounded-xl shadow border border-gray-100 space-y-4"
-              >
-                {/* Tarjeta principal (Resumen) */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-800 capitalize">
-                      {emp.nombre}
-                    </h3>
-                    <span className="text-xs uppercase bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">
-                      {emp.rol}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
-                    <div className="text-right">
-                      <span className="text-xs text-gray-400 block">
-                        Realizadas
-                      </span>
-                      <span className="font-bold text-gray-700">
-                        {emp.cantidadHechas} de {emp.totalAsignadas}
-                      </span>
-                    </div>
-
-                    <div
-                      className={`px-3 py-1.5 rounded-lg font-bold text-sm ${
-                        emp.porcentaje === 100 && emp.totalAsignadas > 0
-                          ? "bg-green-100 text-green-700"
-                          : emp.porcentaje > 0
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-gray-100 text-gray-500"
-                      }`}
-                    >
-                      {emp.porcentaje}% completado
-                    </div>
-                  </div>
-                </div>
-
-                {/* Barra de progreso visual */}
-                <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all duration-500 ${
-                      emp.porcentaje === 100 && emp.totalAsignadas > 0
-                        ? "bg-green-500"
-                        : "bg-blue-600"
-                    }`}
-                    style={{ width: `${emp.porcentaje}%` }}
-                  ></div>
-                </div>
-
-                {/* Botón para desplegar / ocultar el detalle */}
-                <div className="pt-2 flex justify-end">
-                  <button
-                    onClick={() => toggleDesplegar(emp.id)}
-                    aria-expanded={Boolean(estaAbierto)}
-                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    {estaAbierto
-                      ? "Ocultar detalle de tareas ▲"
-                      : "Ver detalle de tareas ▼"}
-                  </button>
-                </div>
-
-                {/* DESGLOSE DESPLEGABLE */}
-                {estaAbierto && (
-                  <div className="space-y-4 pt-4 border-t border-gray-100 transition-all">
-                    {/* 1. SECCIÓN DE TAREAS URGENTES (Si tiene en esta fecha) */}
-                    {emp.urgentesConEstado &&
-                      emp.urgentesConEstado.length > 0 && (
-                        <div className="bg-amber-50 rounded-xl p-4 border border-amber-200 space-y-3">
-                          <h5 className="font-bold text-amber-900 text-sm border-b border-amber-200 pb-2 flex justify-between items-center">
-                            <span>🚨 Tareas Urgentes / Extraordinarias</span>
-                            <span className="text-xs font-normal text-amber-700">
-                              {
-                                emp.urgentesConEstado.filter(
-                                  (t) => t.completada,
-                                ).length
-                              }{" "}
-                              / {emp.urgentesConEstado.length} completadas
-                            </span>
-                          </h5>
-
-                          <div className="space-y-2">
-                            {emp.urgentesConEstado.map((urg) => (
-                              <div
-                                key={urg.id}
-                                className={`flex items-center justify-between p-2.5 rounded-lg border text-xs sm:text-sm ${
-                                  urg.completada
-                                    ? "bg-green-50 border-green-200 text-green-900"
-                                    : "bg-white border-amber-300 text-amber-950"
-                                }`}
-                              >
-                                <div className="pr-3">
-                                  <span
-                                    className={
-                                      urg.completada
-                                        ? "line-through font-medium text-green-800"
-                                        : "text-gray-800 font-medium"
-                                    }
-                                  >
-                                    {urg.descripcion}
-                                  </span>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  <span
-                                    className={`px-2 py-1 rounded text-xs font-semibold ${
-                                      urg.completada
-                                        ? "bg-green-100 text-green-700"
-                                        : "bg-amber-100 text-amber-800"
-                                    }`}
-                                  >
-                                    {urg.completada
-                                      ? "Completado ✓"
-                                      : "Pendiente ⏳"}
-                                  </span>
-
-                                  {/* Botón para que el admin elimine esta urgencia */}
-                                  <button
-                                    onClick={() => cancelarTareaUrgente(urg.id)}
-                                    className="text-red-400 hover:text-red-600 font-bold p-1 transition-colors"
-                                    aria-label={`Cancelar tarea urgente: ${urg.descripcion}`}
-                                  >
-                                    Cancelar
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                    {/* 2. RUTINAS ASIGNADAS */}
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                      Desglose de Rutinas Asignadas:
-                    </h4>
-
-                    {emp.rutinasConEstado && emp.rutinasConEstado.length > 0 ? (
-                      emp.rutinasConEstado.map((rutina) => (
-                        <div
-                          key={rutina.id}
-                          className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-3"
-                        >
-                          <h5 className="font-bold text-gray-800 text-sm border-b pb-2 flex justify-between items-center">
-                            <span>{rutina.titulo}</span>
-                            <span className="text-xs font-normal text-gray-500">
-                              {rutina.tareas.filter((t) => t.completada).length}{" "}
-                              / {rutina.tareas.length} completadas
-                            </span>
-                          </h5>
-
-                          <div className="space-y-2">
-                            {rutina.tareas.map((tarea) => (
-                              <div
-                                key={tarea.id}
-                                className={`flex items-center justify-between p-2.5 rounded-lg border text-xs sm:text-sm ${
-                                  tarea.completada
-                                    ? "bg-green-50 border-green-200 text-green-900"
-                                    : "bg-white border-gray-200 text-gray-500"
-                                }`}
-                              >
-                                <div>
-                                  <span className="text-[10px] font-bold uppercase tracking-wider block text-gray-400">
-                                    {tarea.seccion}
-                                  </span>
-                                  <span
-                                    className={
-                                      tarea.completada
-                                        ? "line-through font-medium text-green-800"
-                                        : "text-gray-700"
-                                    }
-                                  >
-                                    {tarea.descripcion}
-                                  </span>
-                                </div>
-
-                                <div
-                                  className={`px-2 py-1 rounded text-xs font-semibold ${
-                                    tarea.completada
-                                      ? "bg-green-100 text-green-700"
-                                      : "bg-gray-100 text-gray-400"
-                                  }`}
-                                >
-                                  {tarea.completada
-                                    ? "Completado ✓"
-                                    : "Pendiente ⏳"}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-xs text-gray-400 italic py-2">
-                        Este empleado no tiene rutinas asignadas.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
+              <button key={day} className="audit-calendar-day" data-date={day} aria-label={`${displayDate(day)}, ${label}`} aria-pressed={date === day} aria-current={day === today ? "date" : undefined} onClick={() => selectDate(day)}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                {hasAssignments && <span className="audit-assignment-dot" data-testid="audit-assignment-dot" aria-hidden="true" />}
+              </button>
             );
           })}
         </div>
-      )}
+        <p className="audit-calendar-legend"><span className="audit-assignment-dot" aria-hidden="true" /> Tareas asignadas o cumplimiento registrado</p>
+        {!monthReady && <p role="status">Cargando indicadores...</p>}
+        {monthReady && monthResult.error && <p role="alert">No se pudieron cargar los indicadores. <button className="button button--secondary" onClick={() => setReload((value) => value + 1)}>Reintentar</button></p>}
+      </section>
+
+      <section className="audit-results" aria-label={`Auditoría del ${displayDate(date)}`} aria-busy={!dayReady}>
+        <h3 className="text-lg font-bold">Registros del {displayDate(date)}</h3>
+        <p className="audit-explanation">Las rutinas permanentes aparecen cuando tienen cumplimiento registrado ese día.</p>
+        {actionError && <p role="alert">{actionError}</p>}
+        {!dayReady ? <p role="status">Cargando registros...</p> : dayResult.error ? (
+          <p role="alert">No se pudieron cargar los registros. Revisá tu conexión y los permisos de acceso. <button className="button button--secondary" onClick={() => setReload((value) => value + 1)}>Reintentar</button></p>
+        ) : dayResult.employees.length === 0 ? <p className="audit-empty">No hay tareas asignadas ni cumplimiento registrado para esta fecha.</p> : dayResult.employees.map((employee) => {
+          const completed = employee.tasks.filter((task) => task.completed).length;
+          const active = employee.tasks.filter((task) => !task.inactive).length;
+          return (
+            <article key={employee.id} className="audit-employee">
+              <div className="audit-employee-summary">
+                <h3 className="text-lg font-bold">{employee.nombre}</h3>
+                <span>Realizadas: {completed} de {active}</span>
+                <button className="button button--secondary" aria-expanded={Boolean(expanded[employee.id])} onClick={() => setExpanded((previous) => ({ ...previous, [employee.id]: !previous[employee.id] }))}>
+                  {expanded[employee.id] ? "Ocultar detalle de tareas ▲" : "Ver detalle de tareas ▼"}
+                </button>
+              </div>
+              {expanded[employee.id] && <ul className="audit-task-list">{employee.tasks.map((task) => (
+                <li key={task.id} className="audit-task">
+                  <div><p className="audit-task-context">{task.routine}{task.section ? ` · ${task.section}` : ""}</p><p>{task.description}</p></div>
+                  <span className={`audit-task-status ${task.inactive ? "audit-task-status--inactive" : task.completed ? "audit-task-status--complete" : "audit-task-status--pending"}`}>{task.status}</span>
+                  {task.urgentId && !task.inactive && <button className="button button--danger" disabled={Boolean(cancelling)} aria-label={`Cancelar tarea urgente: ${task.description}`} onClick={() => cancelUrgentTask(task.urgentId)}>{cancelling === task.urgentId ? "Cancelando..." : "Cancelar"}</button>}
+                </li>
+              ))}</ul>}
+            </article>
+          );
+        })}
+      </section>
     </div>
   );
 }

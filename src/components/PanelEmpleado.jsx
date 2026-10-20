@@ -1,5 +1,5 @@
 // src/components/PanelEmpleado.jsx
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../services/supabase";
 import { obtenerColorSeccion } from "../utils/coloresSeccion";
 import {
@@ -9,6 +9,7 @@ import {
   routineColorClass,
 } from "../utils/coloresRutina";
 import { currentBusinessDate } from "../utils/businessDate";
+import { useBusinessDate } from "../hooks/useBusinessDate";
 
 export default function PanelEmpleado({ usuario }) {
   const [rutinasAsignadas, setRutinasAsignadas] = useState([]);
@@ -18,12 +19,16 @@ export default function PanelEmpleado({ usuario }) {
   const [errorMensaje, setErrorMensaje] = useState("");
 
   const usuarioId = usuario?.id;
+  const hoy = useBusinessDate();
+  const requestVersion = useRef(0);
+  const [loadedDate, setLoadedDate] = useState(null);
 
   const cargarDatosAsignados = useCallback(async () => {
+    const version = ++requestVersion.current;
     try {
       setCargando(true);
       setErrorMensaje("");
-      const hoy = currentBusinessDate();
+      let nuevasRutinas = [];
 
       // 1. Buscamos rutinas asignadas
       const { data: asignaciones, error: errAsig } = await supabase
@@ -44,14 +49,12 @@ export default function PanelEmpleado({ usuario }) {
           .in("id", idsRutinas);
 
         if (errRutinas) throw errRutinas;
-        setRutinasAsignadas((datosRutinas || []).map((rutina) => ({
+        nuevasRutinas = (datosRutinas || []).map((rutina) => ({
           ...rutina,
           color: ROUTINE_COLORS_ENABLED
             ? normalizeRoutineColor(rutina.color)
             : DEFAULT_ROUTINE_COLOR,
-        })));
-      } else {
-        setRutinasAsignadas([]);
+        }));
       }
 
       // 2. Buscamos tareas urgentes enviadas para hoy
@@ -63,7 +66,7 @@ export default function PanelEmpleado({ usuario }) {
         .is("cancelada_en", null);
 
       if (errUrg) throw errUrg;
-      setTareasUrgentes(datosUrgentes || []);
+
 
       // 3. Auditoría general del día
       const { data: datosAuditoria, error: errAuditoria } = await supabase
@@ -85,22 +88,37 @@ export default function PanelEmpleado({ usuario }) {
         if (urg.completada) mapaCompletadas[urg.id] = true;
       });
 
+      if (version !== requestVersion.current || hoy !== currentBusinessDate()) return;
+      setRutinasAsignadas(nuevasRutinas);
+      setTareasUrgentes(datosUrgentes || []);
       setCompletadasHoy(mapaCompletadas);
+      setLoadedDate(hoy);
     } catch (err) {
+      if (version !== requestVersion.current || hoy !== currentBusinessDate()) return;
+      setLoadedDate(hoy);
       console.error("Error cargando protocolos:", err);
       setErrorMensaje("No se pudieron cargar tus tareas. Intenta nuevamente.");
     } finally {
-      setCargando(false);
+      if (version === requestVersion.current) setCargando(false);
     }
-  }, [usuarioId]);
+  }, [usuarioId, hoy]);
 
   useEffect(() => {
+    const requests = requestVersion;
     if (usuarioId) {
       queueMicrotask(cargarDatosAsignados);
     }
+    return () => { requests.current++; };
   }, [cargarDatosAsignados, usuarioId]);
 
   const toggleTarea = async (tareaId, esUrgente = false) => {
+    // A click after midnight must never toggle yesterday's displayed state.
+    if (hoy !== currentBusinessDate() || loadedDate !== hoy) {
+      await cargarDatosAsignados();
+      return;
+    }
+    const mutationDate = hoy;
+    const mutationVersion = requestVersion.current;
     const yaCompletada = completadasHoy[tareaId];
 
     try {
@@ -112,6 +130,7 @@ export default function PanelEmpleado({ usuario }) {
         });
 
         if (error) throw error;
+        if (mutationDate !== currentBusinessDate() || mutationVersion !== requestVersion.current) return;
         setCompletadasHoy((prev) => ({ ...prev, [tareaId]: nuevoEstado }));
       } else {
         const { error } = await supabase.rpc("set_task_completion", {
@@ -119,15 +138,17 @@ export default function PanelEmpleado({ usuario }) {
           p_completed: !yaCompletada,
         });
         if (error) throw error;
+        if (mutationDate !== currentBusinessDate() || mutationVersion !== requestVersion.current) return;
         setCompletadasHoy((prev) => ({ ...prev, [tareaId]: !yaCompletada }));
       }
     } catch (err) {
+      if (mutationDate !== currentBusinessDate() || mutationVersion !== requestVersion.current) return;
       console.error("Error al actualizar tarea:", err);
       setErrorMensaje("No se pudo actualizar la tarea. Volvé a intentar.");
     }
   };
 
-  if (cargando) {
+  if (cargando || loadedDate !== hoy) {
     return (
       <div className="loading-state justify-center py-10" role="status" aria-live="polite">
         <span className="loading-dot" aria-hidden="true" />

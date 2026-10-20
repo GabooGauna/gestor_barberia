@@ -48,6 +48,8 @@ function applyFilters(rows, searchParams) {
     for (const [column, expression] of searchParams.entries()) {
       if (["select", "order", "limit", "offset"].includes(column)) continue;
       if (expression.startsWith("eq.") && String(row[column]) !== expression.slice(3)) return false;
+      if (expression.startsWith("gte.") && String(row[column]) < expression.slice(4)) return false;
+      if (expression.startsWith("lt.") && String(row[column]) >= expression.slice(3)) return false;
       if (expression.startsWith("in.(")) {
         const expected = expression.slice(4, -1).split(",");
         if (!expected.includes(String(row[column]))) return false;
@@ -201,10 +203,27 @@ class SupabaseMock {
     if (this.failures.has(table)) {
       await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ code: "E2E_CONTROLLED_ERROR", message: this.failures.get(table) }) }); return;
     }
-    const rows = applyFilters(this.tables.get(table) ?? [], url.searchParams);
+    let rows = applyFilters(this.tables.get(table) ?? [], url.searchParams);
+    const selection = url.searchParams.get("select") || "";
+    if (selection.includes("empleados(")) rows = rows.map((row) => ({ ...row, empleados: row.empleados || (this.tables.get("empleados") || []).find(({ id }) => id === row.empleado_id) || null }));
+    if (selection.includes("tareas_rutina(")) rows = rows.map((row) => {
+      if (row.tareas_rutina) return row;
+      const routine = (this.tables.get("rutinas") || []).find((item) => item.tareas_rutina?.some(({ id }) => id === row.tarea_id));
+      const task = (this.tables.get("tareas_rutina") || []).find(({ id }) => id === row.tarea_id) || routine?.tareas_rutina.find(({ id }) => id === row.tarea_id);
+      return { ...row, tareas_rutina: task ? { ...task, rutinas: routine || (this.tables.get("rutinas") || []).find(({ id }) => id === task.rutina_id) || null } : null };
+    });
+    const order = url.searchParams.get("order");
+    if (order) {
+      const [column, direction] = order.split(".");
+      rows = [...rows].sort((a, b) => String(a[column]).localeCompare(String(b[column])) * (direction === "desc" ? -1 : 1));
+    }
+    const total = rows.length;
+    const offset = Number(url.searchParams.get("offset") || 0);
+    const limit = url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : total;
+    rows = rows.slice(offset, offset + limit);
     const wantsSingleObject = request.headers()["accept"]?.includes("application/vnd.pgrst.object+json");
     const response = wantsSingleObject ? (rows[0] ?? null) : rows;
-    await route.fulfill({ status: 200, contentType: "application/json", headers: { "Content-Range": `0-${Math.max(rows.length - 1, 0)}/${rows.length}` }, body: method === "HEAD" ? "" : JSON.stringify(response) });
+    await route.fulfill({ status: 200, contentType: "application/json", headers: { "Content-Range": `${offset}-${Math.max(offset + rows.length - 1, 0)}/${total}` }, body: method === "HEAD" ? "" : JSON.stringify(response) });
   }
 }
 
