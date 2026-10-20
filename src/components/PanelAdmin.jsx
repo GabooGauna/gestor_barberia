@@ -84,7 +84,7 @@ export default function PanelAdmin() {
   const secciones = [
     ["plantillas", "Plantillas", "Protocolos base"],
     ["empleados", "Equipo", "Perfiles y roles"],
-    ["asignar", "Asignaciones", "Rutinas por persona"],
+    ["asignar", "Asignaciones", "Rutinas de hoy"],
     ["urgentes", "Urgencias", "Trabajo extraordinario"],
     ["auditoria", "Auditoría", "Cumplimiento diario"],
   ];

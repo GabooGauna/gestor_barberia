@@ -1,213 +1,116 @@
-// src/components/AsignarRutinas.jsx
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../services/supabase";
+import { useBusinessDate } from "../hooks/useBusinessDate";
+import { currentBusinessDate } from "../utils/businessDate";
 
 export default function AsignarRutinas() {
-  const [empleados, setEmpleados] = useState([]);
-  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null);
-  const [rutinasTotales, setRutinasTotales] = useState([]);
-  const [rutinasAsignadasIds, setRutinasAsignadasIds] = useState([]);
-  const [cargando, setCargando] = useState(false);
-  const [mensaje, setMensaje] = useState("");
+  const today = useBusinessDate();
+  const [catalog, setCatalog] = useState({ employees: [], routines: [], loading: true, error: false });
+  const [employeeId, setEmployeeId] = useState("");
+  const [retry, setRetry] = useState(0);
+  const [selection, setSelection] = useState({ key: "", ids: [], error: false, message: "" });
+  const [saving, setSaving] = useState(false);
+  const key = `${employeeId}:${today}:${retry}`;
+  const ready = selection.key === key;
 
-  const cargarDatosIniciales = async () => {
-    try {
-      setCargando(true);
-      // Obtenemos solo los empleados (puedes filtrar por rol 'empleado')
-      const { data: empData, error: empErr } = await supabase
-        .from("empleados")
-        .select("id, nombre, rol")
-        .eq("activo", true)
-        .order("nombre");
-
-      if (empErr) throw empErr;
-      setEmpleados(empData || []);
-
-      // Obtenemos todas las rutinas disponibles en el sistema
-      const { data: rutData, error: rutErr } = await supabase
-        .from("rutinas")
-        .select("id, titulo")
-        .is("archivada_en", null)
-        .order("titulo");
-
-      if (rutErr) throw rutErr;
-      setRutinasTotales(rutData || []);
-    } catch (err) {
-      console.error("Error al cargar datos iniciales:", err);
-    } finally {
-      setCargando(false);
-    }
-  };
-
-  const cargarRutinasDelEmpleado = async (empleadoId) => {
-    try {
-      const { data, error } = await supabase
-        .from("empleado_rutinas")
-        .select("rutina_id")
-        .eq("empleado_id", empleadoId);
-
-      if (error) throw error;
-
-      // Convertimos el resultado en un array plano de IDs (ej: ['uuid-1', 'uuid-2'])
-      const ids = data.map((item) => item.rutina_id);
-      setRutinasAsignadasIds(ids);
-    } catch (err) {
-      console.error("Error al cargar rutinas del empleado:", err);
-    }
-  };
-
-  // 1. Cargamos la lista de empleados y las rutinas generales al montar el componente
   useEffect(() => {
-    queueMicrotask(cargarDatosIniciales);
-  }, []);
-
-  // 2. Cada vez que el administrador cambia de empleado, buscamos qué rutinas tiene asignadas
-  useEffect(() => {
-    if (empleadoSeleccionado) {
-      queueMicrotask(() =>
-        cargarRutinasDelEmpleado(empleadoSeleccionado.id),
-      );
-    }
-  }, [empleadoSeleccionado]);
-
-  // Función al marcar o desmarcar una casilla (Checkbox)
-  const toggleAsignacionRutina = async (rutinaId) => {
-    if (!empleadoSeleccionado) return;
-
-    const yaAsignada = rutinasAsignadasIds.includes(rutinaId);
-
-    try {
-      setMensaje("");
-      if (yaAsignada) {
-        // Si ya la tenía, la borramos de la tabla puente
-        const { error } = await supabase
-          .from("empleado_rutinas")
-          .delete()
-          .eq("empleado_id", empleadoSeleccionado.id)
-          .eq("rutina_id", rutinaId);
-
-        if (error) throw error;
-
-        setRutinasAsignadasIds((prev) => prev.filter((id) => id !== rutinaId));
-      } else {
-        // Si no la tenía, la insertamos en la tabla puente
-        const { error } = await supabase.from("empleado_rutinas").insert([
-          {
-            empleado_id: empleadoSeleccionado.id,
-            rutina_id: rutinaId,
-          },
+    const controller = new AbortController();
+    async function load() {
+      try {
+        const [employees, routines] = await Promise.all([
+          supabase.from("empleados").select("id,nombre,rol").eq("activo", true).order("nombre").abortSignal(controller.signal),
+          supabase.from("rutinas").select("id,titulo").is("archivada_en", null).order("titulo").abortSignal(controller.signal),
         ]);
-
-        if (error) throw error;
-
-        setRutinasAsignadasIds((prev) => [...prev, rutinaId]);
+        if (employees.error || routines.error) throw new Error("catalog_unavailable");
+        if (!controller.signal.aborted) setCatalog({ employees: employees.data || [], routines: routines.data || [], loading: false, error: false });
+      } catch {
+        if (!controller.signal.aborted) setCatalog({ employees: [], routines: [], loading: false, error: true });
       }
-      setMensaje("Cambios guardados correctamente.");
-      setTimeout(() => setMensaje(""), 2500);
-    } catch (err) {
-      console.error("Error al modificar asignación:", err);
-      setMensaje("Error al actualizar la asignación.");
     }
-  };
+    load();
+    return () => controller.abort();
+  }, [retry]);
 
-  if (cargando) {
-    return (
-      <div className="text-center py-8 text-gray-400">
-        Cargando panel de asignaciones...
-      </div>
-    );
+  useEffect(() => {
+    if (!employeeId) return;
+    const controller = new AbortController();
+    async function load() {
+      const { data, error } = await supabase.from("asignaciones_diarias")
+        .select("rutina_id").eq("empleado_id", employeeId).eq("fecha", today)
+        .is("cancelada_en", null).abortSignal(controller.signal);
+      if (!controller.signal.aborted) setSelection({ key, ids: error ? [] : (data || []).map((row) => row.rutina_id), error: Boolean(error), message: "" });
+    }
+    load();
+    return () => controller.abort();
+  }, [employeeId, today, key]);
+
+  async function toggleRoutine(routineId) {
+    if (!ready || selection.error || saving || today !== currentBusinessDate()) return;
+    const assigned = selection.ids.includes(routineId);
+    setSaving(true);
+    try {
+      const { error } = await supabase.rpc("set_daily_routine_assignment", {
+        p_empleado_id: employeeId, p_rutina_id: routineId, p_assigned: !assigned, p_fecha: today,
+      });
+      if (error) throw error;
+      if (today !== currentBusinessDate()) return;
+      setSelection((previous) => previous.key !== key ? previous : {
+        ...previous,
+        ids: assigned ? previous.ids.filter((id) => id !== routineId) : [...previous.ids, routineId],
+        message: "Asignaciones de hoy guardadas.",
+      });
+    } catch {
+      setSelection((previous) => previous.key !== key ? previous : { ...previous, message: "No se pudo guardar. Volvé a intentarlo." });
+    } finally {
+      setSaving(false);
+    }
   }
 
+  const employee = catalog.employees.find((person) => person.id === employeeId);
   return (
-    <div className="bg-white p-6 rounded-xl shadow border border-gray-100 space-y-6">
+    <section className="daily-assignments bg-white p-6 rounded-xl shadow border border-gray-100 space-y-6" aria-label="Asignaciones diarias">
       <div>
-        <h3 className="text-xl font-bold text-gray-800">
-          Asignación de Rutinas al Personal
-        </h3>
-        <p className="text-xs text-gray-500 mt-1">
-          Selecciona un empleado para configurar qué protocolos debe cumplir en
-          su panel.
-        </p>
+        <h3 className="text-xl font-bold">Asignaciones del día</h3>
+        <p className="text-sm text-gray-500 mt-1">{today.split("-").reverse().join("/")} · Elegí las rutinas que debe realizar cada integrante hoy.</p>
+        <p className="text-sm text-gray-500 mt-1">Cada día empieza sin asignaciones. Las plantillas y el historial se conservan.</p>
       </div>
-
-      {/* Selectores de Empleados en forma de botones o select */}
-      <div className="space-y-2">
-        <label className="block text-xs font-semibold text-gray-600 uppercase">
-          1. Selecciona un Empleado:
-        </label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {empleados.map((emp) => (
-            <button
-              key={emp.id}
-              onClick={() => setEmpleadoSeleccionado(emp)}
-              className={`p-3 text-left rounded-xl border-2 transition-all ${
-                empleadoSeleccionado?.id === emp.id
-                  ? "bg-blue-50 border-blue-500 text-blue-900 font-bold shadow-sm"
-                  : "bg-gray-50 border-gray-200 hover:border-gray-300 text-gray-700"
-              }`}
-            >
-              <div className="capitalize truncate">{emp.nombre}</div>
-              <span className="text-[10px] uppercase text-gray-400 font-medium">
-                {emp.rol}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Listado de Rutinas con Checkboxes si hay un empleado seleccionado */}
-      {empleadoSeleccionado ? (
-        <div className="space-y-3 pt-4 border-t border-gray-100">
-          <div className="flex justify-between items-center">
-            <label className="block text-xs font-semibold text-gray-600 uppercase">
-              2. Rutinas asignadas a{" "}
-              <span className="text-blue-600 capitalize font-bold">
-                {empleadoSeleccionado.nombre}
-              </span>
-              :
-            </label>
-            {mensaje && (
-              <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
-                {mensaje}
-              </span>
-            )}
+      {catalog.loading ? <p role="status">Cargando equipo y rutinas…</p> : catalog.error ? (
+        <div role="alert">No se pudieron cargar el equipo y las rutinas. <button className="button button--secondary" onClick={() => setRetry((value) => value + 1)}>Reintentar</button></div>
+      ) : <>
+        <div className="space-y-2">
+          <p className="text-sm font-semibold">Elegí un integrante</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {catalog.employees.map((person) => (
+              <button type="button" key={person.id} aria-pressed={person.id === employeeId} disabled={saving}
+                onClick={() => setEmployeeId(person.id)}
+                className={`p-3 text-left rounded-xl border-2 ${person.id === employeeId ? "bg-blue-50 border-blue-500 text-blue-900" : "bg-gray-50 border-gray-200 text-gray-700"}`}>
+                <span className="block font-semibold">{person.nombre}</span>
+                <span className="text-xs">{person.rol === "admin" ? "Administración" : "Empleado"}</span>
+              </button>
+            ))}
           </div>
-
+          {catalog.employees.length === 0 && <p>No hay integrantes activos.</p>}
+        </div>
+        {!employeeId ? <p className="text-sm text-gray-500">Seleccioná un integrante para asignar sus rutinas de hoy.</p> : !ready ? <p role="status">Cargando asignaciones de hoy…</p> : selection.error ? (
+          <div role="alert">No se pudieron consultar las asignaciones. <button className="button button--secondary" onClick={() => setRetry((value) => value + 1)}>Reintentar</button></div>
+        ) : <div className="space-y-3">
+          <h4 className="font-semibold">Rutinas de hoy para {employee?.nombre}</h4>
+          {selection.ids.length === 0 && <p className="text-sm text-gray-500">Sin rutinas asignadas para hoy.</p>}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {rutinasTotales.map((rutina) => {
-              const asignada = rutinasAsignadasIds.includes(rutina.id);
-              return (
-                <button
-                  type="button"
-                  key={rutina.id}
-                  onClick={() => toggleAsignacionRutina(rutina.id)}
-                  aria-pressed={asignada}
-                  className={`w-full text-left flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                    asignada
-                      ? "bg-blue-50 border-blue-400 text-blue-900 font-medium"
-                      : "bg-white border-gray-200 hover:border-gray-300 text-gray-600"
-                  }`}
-                >
-                  <span className="text-sm">{rutina.titulo}</span>
-                  <div
-                    className={`w-6 h-6 rounded-md flex items-center justify-center border-2 transition-colors ${
-                      asignada
-                        ? "bg-blue-600 border-blue-600 text-white"
-                        : "border-gray-300 bg-white"
-                    }`}
-                  >
-                    {asignada && <span className="text-xs font-bold">✓</span>}
-                  </div>
-                </button>
-              );
+            {catalog.routines.map((routine) => {
+              const assigned = selection.ids.includes(routine.id);
+              return <button type="button" key={routine.id} aria-pressed={assigned} disabled={saving}
+                onClick={() => toggleRoutine(routine.id)}
+                className={`w-full text-left flex items-center justify-between p-4 rounded-xl border-2 ${assigned ? "bg-blue-50 border-blue-400 text-blue-900" : "bg-white border-gray-200 text-gray-600"}`}>
+                <span>{routine.titulo}</span><span aria-hidden="true">{assigned ? "✓" : "+"}</span>
+              </button>;
             })}
           </div>
-        </div>
-      ) : (
-        <div className="p-8 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200 text-gray-400 text-sm">
-          Haz clic en uno de arriba para comenzar a configurar sus tareas.
-        </div>
-      )}
-    </div>
+          {catalog.routines.length === 0 && <p>No hay rutinas disponibles. Creá una plantilla para comenzar.</p>}
+          {saving && <p role="status">Guardando asignación…</p>}
+          {selection.message && <p role={selection.message.startsWith("No se") ? "alert" : "status"}>{selection.message}</p>}
+        </div>}
+      </>}
+    </section>
   );
 }

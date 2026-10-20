@@ -26,9 +26,9 @@ async function seedColorEnvironment(page, supabaseMock, user = admin) {
     },
   ]);
   supabaseMock.setTable("tareas_rutina", []);
-  supabaseMock.setTable("empleado_rutinas", [
+  supabaseMock.setTable("asignaciones_diarias", [
     {
-      id: "assignment-1",
+      id: "assignment-1", tarea_ids: ["tarea-1"], fecha: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date()), cancelada_en: null,
       empleado_id: employee.id,
       rutina_id: "rutina-1",
     },
@@ -60,11 +60,11 @@ test("crea y edita colores semánticos cuando la capacidad está habilitada", as
     .first();
   await expect(createColorPicker).toBeVisible();
   await expect(
-    createColorPicker.getByRole("radio", { name: "Cobre (predeterminado)" }),
+    createColorPicker.getByRole("radio", { name: "Cobre" }),
   ).toBeChecked();
 
   await page.getByLabel("Nombre de la rutina").fill("Cierre del estudio");
-  await createColorPicker.getByRole("radio", { name: "Ciruela" }).check();
+  await createColorPicker.getByRole("radio", { name: "Violeta" }).locator("..").click();
   supabaseMock.delayTable("rutinas", 300);
   await page.getByRole("button", { name: "Crear rutina" }).click();
   const creatingButton = page.getByRole("button", { name: "Creando rutina…" });
@@ -85,15 +85,15 @@ test("crea y edita colores semánticos cuando la capacidad está habilitada", as
     .getByRole("group", { name: "Color de identificación" })
     .nth(1);
   await expect(
-    editColorPicker.getByRole("radio", { name: "Azul acero" }),
+    editColorPicker.getByRole("radio", { name: "Azul" }),
   ).toBeChecked();
 
-  await editColorPicker.getByRole("radio", { name: "Verde salvia" }).click();
+  await editColorPicker.getByRole("radio", { name: "Verde" }).locator("..").click();
   await expect(page.getByText("Guardando color…")).toBeVisible();
   await expect(page.getByText("Color de rutina actualizado.")).toBeVisible();
 
   await editColorPicker
-    .getByRole("radio", { name: "Cobre (predeterminado)" })
+    .getByRole("radio", { name: "Cobre" })
     .click();
   await expect
     .poll(

@@ -1272,17 +1272,19 @@ textarea::placeholder { color: var(--ink-faint); }
 
 /* GNS audit calendar: copper selects a date; dots represent stored daily work. */
 .audit-view { display: grid; gap: 1.5rem; }
+.audit-workspace { display: grid; grid-template-columns: minmax(19rem, 23rem) minmax(0, 1fr); align-items: start; gap: 1.5rem; }
 .audit-header, .audit-calendar, .audit-employee {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface-1);
   padding: 1.25rem;
 }
-.audit-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+.audit-header { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; padding: 0 0 1.25rem; }
 .audit-header p, .audit-explanation, .audit-empty, .audit-task-context, .audit-calendar-legend { color: var(--ink-muted); }
-.audit-date-control { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; }
-.audit-date-control input { min-width: 0; min-height: 2.75rem; padding: .45rem; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--ink); }
-.audit-calendar { width: min(100%, 30rem); }
+.audit-header p { margin-top: .3rem; }
+.audit-calendar { width: 100%; }
+.audit-calendar-heading { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--line); }
+.audit-calendar-heading h3 { font-weight: 700; }
 .audit-calendar-nav { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .75rem; }
 .audit-calendar-nav h3 { font-weight: 700; text-transform: capitalize; }
 .audit-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .2rem; }
@@ -1294,9 +1296,13 @@ textarea::placeholder { color: var(--ink-faint); }
 .audit-assignment-dot { display: inline-block; flex: 0 0 .35rem; width: .35rem; height: .35rem; border-radius: 50%; background: var(--accent-strong); }
 .audit-calendar-day .audit-assignment-dot { position: absolute; bottom: .35rem; }
 .audit-calendar-legend { display: flex; align-items: center; gap: .5rem; margin-top: .8rem; font-size: .8rem; }
-.audit-results { display: grid; gap: 1rem; }
-.audit-explanation { margin-top: -.5rem; font-size: .9rem; }
-.audit-empty { padding: 1.5rem 0; }
+.audit-results { display: grid; gap: 1rem; min-width: 0; align-content: start; }
+.audit-explanation { margin-top: -.5rem; font-size: .9rem; max-width: 65ch; }
+.audit-empty { padding: 2rem 1.5rem; border: 1px dashed var(--line-strong); border-radius: var(--radius-md); line-height: 1.6; }
+.audit-history-note { color: var(--ink-muted); font-size: .8rem; padding-left: .7rem; border-left: 2px solid var(--accent); }
+.audit-action-success, .audit-action-error { border-radius: var(--radius-sm); padding: .8rem 1rem; font-size: .9rem; }
+.audit-action-success { background: var(--success-soft); color: var(--success-ink); }
+.audit-action-error { background: var(--danger-soft); color: var(--danger); }
 .audit-employee-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
 .audit-employee-summary h3 { margin-right: auto; }
 .audit-task-list { margin-top: 1rem; padding: 0; list-style: none; border-top: 1px solid var(--line); }
@@ -1307,8 +1313,19 @@ textarea::placeholder { color: var(--ink-faint); }
 .audit-task-status--complete { background: var(--success-soft); color: var(--success-ink); }
 .audit-task-status--pending { background: var(--warning-soft); color: var(--warning); }
 .audit-task-status--inactive { background: var(--surface-2); color: var(--ink-muted); }
+.audit-confirmation { text-align: center; }
+.audit-confirmation-icon { display: grid; place-items: center; width: 3.5rem; height: 3.5rem; margin: 0 auto 1.25rem; border: 2px solid var(--warning); border-radius: 50%; color: var(--warning); background: var(--warning-soft); font-size: 2rem; font-weight: 600; }
+.audit-confirmation-description { display: grid; gap: .85rem; margin: 1rem 0 1.5rem; color: var(--ink-muted); font-size: .95rem; line-height: 1.6; }
+.audit-confirmation-task { padding: .8rem 1rem; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--ink); overflow-wrap: anywhere; }
+.audit-confirmation .dialog-actions { justify-content: center; flex-wrap: wrap; }
+.audit-confirmation .audit-action-error { margin-bottom: 1rem; }
+@media (max-width: 1100px) {
+  .audit-workspace { grid-template-columns: minmax(0, 1fr); }
+  .audit-calendar { max-width: 30rem; }
+}
 @media (max-width: 480px) {
-  .audit-header, .audit-calendar, .audit-employee { padding: .85rem; }
+  .audit-header { padding-bottom: 1rem; }
+  .audit-calendar, .audit-employee { padding: .85rem; }
   .audit-task { flex-wrap: wrap; }
   .audit-task > div { flex-basis: 100%; }
   .audit-employee-summary { gap: .65rem; }

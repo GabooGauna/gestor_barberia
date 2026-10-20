@@ -66,7 +66,7 @@ export default function RegistroEmpleados({ onEmpleadoCreado }) {
         <div className="form-field compact">
           <label htmlFor="employee-password">Contraseña inicial</label>
           <input id="employee-password" type={showPasswords ? "text" : "password"} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={cargando} />
-          <small>12–72 bytes y al menos tres tipos de caracteres.</small>
+          <small>Recomendamos 12 caracteres o más. Combiná al menos tres de estos tipos: mayúsculas, minúsculas, números o símbolos.</small>
         </div>
         <div className="form-field compact">
           <label htmlFor="employee-password-confirmation">Repetir contraseña</label>

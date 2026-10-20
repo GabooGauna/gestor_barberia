@@ -29,6 +29,16 @@ Reviewer independiente revisará después de las validaciones.
 
 ## Dependencias
 
+Actualización autorizada el 20 de octubre: el propietario eligió asignaciones
+diarias reales y autorizó directamente el SQL mínimo en Supabase, commit/push.
+Sustituye la configuración permanente como fuente del trabajo actual: tabla
+`asignaciones_diarias` por empleado/rutina/fecha, con `tarea_ids` capturados al
+asignar, cancelación lógica y RLS. El legado sin fecha se conserva intacto y no
+se copia a fechas ficticias. Cada día comienza sin selecciones. Calendario único,
+diálogo GNS, urgencias históricas/completadas sin cancelación (UI y servidor),
+textos de contraseña claros y colores Cobre/Verde/Azul/Violeta. Alcance acotado;
+no reauditar Etapa 4 ni declarar cerrada toda Etapa 5.
+
 Etapa 4 aprobada y política de retención, corrección, visibilidad y zona horaria definida.
 
 ## Alcance

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../services/supabase";
 import { useBusinessDate } from "../hooks/useBusinessDate";
+import { currentBusinessDate } from "../utils/businessDate";
+import ConfirmationDialog from "./ConfirmationDialog";
 
 const PAGE_SIZE = 500;
 
@@ -29,7 +31,7 @@ function displayDate(date) {
   return date.split("-").reverse().join("/");
 }
 
-function groupRecords(audits, urgentTasks) {
+function groupRecords(audits, urgentTasks, assignments) {
   const employees = new Map();
   const add = (record, task) => {
     if (!employees.has(record.empleado_id)) {
@@ -41,7 +43,38 @@ function groupRecords(audits, urgentTasks) {
     }
     employees.get(record.empleado_id).tasks.push(task);
   };
-  audits.forEach((record) => add(record, {
+  const auditMap = new Map(audits.map((record) => [`${record.empleado_id}:${record.tarea_id}`, record]));
+  const includedAudits = new Set();
+  assignments.forEach((assignment) => {
+    const routine = assignment.rutinas;
+    const ids = assignment.tarea_ids || [];
+    ids.forEach((id) => {
+      const key = `${assignment.empleado_id}:${id}`;
+      const audit = auditMap.get(key);
+      if (audit) includedAudits.add(audit.id);
+      const task = routine?.tareas_rutina?.find((item) => item.id === id) || audit?.tareas_rutina;
+      const completed = Boolean(audit && !audit.anulada_en);
+      const cancelled = Boolean(assignment.cancelada_en);
+      add(assignment, {
+        id: `assignment-${assignment.id}-${id}`,
+        description: task?.descripcion || "Tarea sin descripción disponible",
+        routine: routine?.titulo || "Rutina asignada",
+        section: task?.seccion,
+        status: cancelled ? (completed ? "Asignación cancelada · Completado" : "Asignación cancelada") : completed ? "Completado ✓" : "Pendiente ⏳",
+        completed: completed && !cancelled,
+        inactive: cancelled,
+      });
+    });
+    if (ids.length === 0) add(assignment, {
+      id: `assignment-${assignment.id}`,
+      description: "Esta rutina no tenía tareas al asignarse.",
+      routine: routine?.titulo || "Rutina asignada",
+      status: assignment.cancelada_en ? "Asignación cancelada" : "Sin tareas",
+      completed: false, inactive: Boolean(assignment.cancelada_en), counted: false,
+    });
+  });
+  // Older completions remain visible even without a dated assignment record.
+  audits.filter((record) => !includedAudits.has(record.id)).forEach((record) => add(record, {
     id: `audit-${record.id}`,
     description: record.tareas_rutina?.descripcion || "Tarea sin descripción disponible",
     routine: record.tareas_rutina?.rutinas?.titulo || "Rutina",
@@ -53,6 +86,7 @@ function groupRecords(audits, urgentTasks) {
   urgentTasks.forEach((record) => add(record, {
     id: `urgent-${record.id}`,
     urgentId: record.id,
+    date: record.fecha,
     description: record.descripcion,
     routine: "Tareas Urgentes / Extraordinarias",
     status: record.cancelada_en ? "Cancelada" : record.completada ? "Completado ✓" : "Pendiente ⏳",
@@ -74,6 +108,8 @@ export default function CalendarioAuditoria() {
   const [reload, setReload] = useState(0);
   const [cancelling, setCancelling] = useState("");
   const [actionError, setActionError] = useState("");
+  const [confirmation, setConfirmation] = useState(null);
+  const [actionSuccess, setActionSuccess] = useState(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -81,11 +117,12 @@ export default function CalendarioAuditoria() {
       try {
         const first = `${month}-01`;
         const next = `${shiftMonth(month, 1)}-01`;
-        const [audits, urgentTasks] = await Promise.all([
+        const [audits, urgentTasks, assignments] = await Promise.all([
           readPages(() => supabase.from("auditoria_diaria").select("id,fecha").gte("fecha", first).lt("fecha", next), controller.signal),
           readPages(() => supabase.from("tareas_urgentes").select("id,fecha").gte("fecha", first).lt("fecha", next), controller.signal),
+          readPages(() => supabase.from("asignaciones_diarias").select("id,fecha").gte("fecha", first).lt("fecha", next), controller.signal),
         ]);
-        if (!controller.signal.aborted) setMonthResult({ month, dates: [...new Set([...audits, ...urgentTasks].map((r) => r.fecha))], loading: false, error: false });
+        if (!controller.signal.aborted) setMonthResult({ month, dates: [...new Set([...audits, ...urgentTasks, ...assignments].map((r) => r.fecha))], loading: false, error: false });
       } catch {
         if (!controller.signal.aborted) setMonthResult({ month, dates: [], loading: false, error: true });
       }
@@ -98,15 +135,18 @@ export default function CalendarioAuditoria() {
     const controller = new AbortController();
     async function load() {
       try {
-        const [audits, urgentTasks] = await Promise.all([
+        const [audits, urgentTasks, assignments] = await Promise.all([
           readPages(() => supabase.from("auditoria_diaria")
             .select("id,tarea_id,empleado_id,anulada_en,empleados(id,nombre,rol),tareas_rutina(id,seccion,descripcion,rutinas(id,titulo))")
             .eq("fecha", date), controller.signal),
           readPages(() => supabase.from("tareas_urgentes")
-            .select("id,empleado_id,descripcion,completada,cancelada_en,empleados(id,nombre,rol)")
+            .select("id,fecha,empleado_id,descripcion,completada,cancelada_en,empleados(id,nombre,rol)")
+            .eq("fecha", date), controller.signal),
+          readPages(() => supabase.from("asignaciones_diarias")
+            .select("id,empleado_id,rutina_id,fecha,cancelada_en,tarea_ids,empleados(id,nombre),rutinas(id,titulo,tareas_rutina(id,seccion,descripcion,orden))")
             .eq("fecha", date), controller.signal),
         ]);
-        if (!controller.signal.aborted) setDayResult({ date, employees: groupRecords(audits, urgentTasks), loading: false, error: false });
+        if (!controller.signal.aborted) setDayResult({ date, employees: groupRecords(audits, urgentTasks, assignments), loading: false, error: false });
       } catch {
         if (!controller.signal.aborted) setDayResult({ date, employees: [], loading: false, error: true });
       }
@@ -118,15 +158,30 @@ export default function CalendarioAuditoria() {
   const selectDate = (value) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
     setSelectedDate(value === today ? null : value);
+    setConfirmation(null);
     setActionError("");
+    setActionSuccess(null);
   };
-  const cancelUrgentTask = async (id) => {
-    if (!confirm("¿Cancelar esta tarea urgente? El registro se conservará en la auditoría.")) return;
+  const canCancel = (task) => date === today && date === currentBusinessDate() && task.date === date && task.urgentId && !task.inactive && !task.completed;
+  const requestCancellation = (task) => {
+    if (!canCancel(task)) return;
+    setActionError("");
+    setActionSuccess(null);
+    setConfirmation({ task, date, today });
+  };
+  const cancelUrgentTask = async () => {
+    if (!confirmation || confirmation.date !== date || confirmation.today !== today || !canCancel(confirmation.task) || cancelling) {
+      setConfirmation(null);
+      return;
+    }
+    const id = confirmation.task.urgentId;
     setCancelling(id);
     setActionError("");
     try {
       const { error } = await supabase.rpc("cancel_urgent_task", { p_urgent_id: id });
       if (error) throw error;
+      setConfirmation(null);
+      setActionSuccess({ date, message: "Tarea cancelada. El registro se conserva en la auditoría." });
       setDayResult((previous) => ({ ...previous, loading: true }));
       setReload((value) => value + 1);
     } catch {
@@ -150,14 +205,14 @@ export default function CalendarioAuditoria() {
           <h2 className="text-xl font-bold">Calendario Operativo y Auditoría</h2>
           <p>Revisá las tareas y el cumplimiento registrados para cada día.</p>
         </div>
-        <div className="audit-date-control">
-          <label htmlFor="audit-date">Seleccionar fecha:</label>
-          <input id="audit-date" type="date" value={date} onChange={(event) => selectDate(event.target.value)} />
-          <button className="button button--secondary" onClick={() => selectDate(today)}>Hoy</button>
-        </div>
       </div>
 
+      <div className="audit-workspace">
       <section className="audit-calendar" aria-label="Calendario de asignaciones">
+        <div className="audit-calendar-heading">
+          <h3>Elegí un día</h3>
+          <button className="button button--secondary" onClick={() => selectDate(today)}>Hoy</button>
+        </div>
         <div className="audit-calendar-nav">
           <button className="button button--secondary" aria-label="Mes anterior" onClick={() => selectDate(`${shiftMonth(month, -1)}-01`)}>‹</button>
           <h3>{monthTitle}</h3>
@@ -185,13 +240,14 @@ export default function CalendarioAuditoria() {
 
       <section className="audit-results" aria-label={`Auditoría del ${displayDate(date)}`} aria-busy={!dayReady}>
         <h3 className="text-lg font-bold">Registros del {displayDate(date)}</h3>
-        <p className="audit-explanation">Las rutinas permanentes aparecen cuando tienen cumplimiento registrado ese día.</p>
-        {actionError && <p role="alert">{actionError}</p>}
+        <p className="audit-explanation">Las asignaciones y los estados corresponden únicamente a la fecha elegida.</p>
+        {date !== today && <p className="audit-history-note">Consulta histórica · Los registros se conservan sin cambios.</p>}
+        {actionSuccess?.date === date && <p className="audit-action-success" role="status">{actionSuccess.message}</p>}
         {!dayReady ? <p role="status">Cargando registros...</p> : dayResult.error ? (
           <p role="alert">No se pudieron cargar los registros. Revisá tu conexión y los permisos de acceso. <button className="button button--secondary" onClick={() => setReload((value) => value + 1)}>Reintentar</button></p>
         ) : dayResult.employees.length === 0 ? <p className="audit-empty">No hay tareas asignadas ni cumplimiento registrado para esta fecha.</p> : dayResult.employees.map((employee) => {
           const completed = employee.tasks.filter((task) => task.completed).length;
-          const active = employee.tasks.filter((task) => !task.inactive).length;
+          const active = employee.tasks.filter((task) => !task.inactive && task.counted !== false).length;
           return (
             <article key={employee.id} className="audit-employee">
               <div className="audit-employee-summary">
@@ -205,13 +261,20 @@ export default function CalendarioAuditoria() {
                 <li key={task.id} className="audit-task">
                   <div><p className="audit-task-context">{task.routine}{task.section ? ` · ${task.section}` : ""}</p><p>{task.description}</p></div>
                   <span className={`audit-task-status ${task.inactive ? "audit-task-status--inactive" : task.completed ? "audit-task-status--complete" : "audit-task-status--pending"}`}>{task.status}</span>
-                  {task.urgentId && !task.inactive && <button className="button button--danger" disabled={Boolean(cancelling)} aria-label={`Cancelar tarea urgente: ${task.description}`} onClick={() => cancelUrgentTask(task.urgentId)}>{cancelling === task.urgentId ? "Cancelando..." : "Cancelar"}</button>}
+                  {canCancel(task) && <button className="button button--danger" disabled={Boolean(cancelling)} aria-label={`Cancelar tarea urgente: ${task.description}`} onClick={() => requestCancellation(task)}>{cancelling === task.urgentId ? "Cancelando..." : "Cancelar"}</button>}
                 </li>
               ))}</ul>}
             </article>
           );
         })}
       </section>
+      </div>
+      {confirmation && confirmation.date === date && confirmation.today === today && date === today && (
+        <ConfirmationDialog title="¿Cancelar esta tarea urgente?" confirmLabel="Cancelar tarea" busy={Boolean(cancelling)} error={actionError} onConfirm={cancelUrgentTask} onDismiss={() => setConfirmation(null)}>
+          <p className="audit-confirmation-task">{confirmation.task.description}</p>
+          <p>Dejará de estar pendiente. El registro se conservará en la auditoría de hoy.</p>
+        </ConfirmationDialog>
+      )}
     </div>
   );
 }

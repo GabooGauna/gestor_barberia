@@ -32,9 +32,11 @@ export default function PanelEmpleado({ usuario }) {
 
       // 1. Buscamos rutinas asignadas
       const { data: asignaciones, error: errAsig } = await supabase
-        .from("empleado_rutinas")
-        .select("rutina_id")
-        .eq("empleado_id", usuarioId);
+        .from("asignaciones_diarias")
+        .select("rutina_id,tarea_ids")
+        .eq("empleado_id", usuarioId)
+        .eq("fecha", hoy)
+        .is("cancelada_en", null);
 
       if (errAsig) throw errAsig;
       const idsRutinas = asignaciones?.map((a) => a.rutina_id) || [];
@@ -51,6 +53,8 @@ export default function PanelEmpleado({ usuario }) {
         if (errRutinas) throw errRutinas;
         nuevasRutinas = (datosRutinas || []).map((rutina) => ({
           ...rutina,
+          tareas_rutina: (rutina.tareas_rutina || []).filter((tarea) =>
+            asignaciones.some((asignacion) => asignacion.rutina_id === rutina.id && (asignacion.tarea_ids || []).includes(tarea.id))),
           color: ROUTINE_COLORS_ENABLED
             ? normalizeRoutineColor(rutina.color)
             : DEFAULT_ROUTINE_COLOR,

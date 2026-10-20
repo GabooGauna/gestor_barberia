@@ -10,6 +10,13 @@
 
 ## Estado local de Etapa 4
 
+Seguimiento del 20 de octubre: el propietario confirmó asignaciones diarias
+reales y SQL mínimo directo en Supabase. `asignaciones_diarias` y su RPC por
+fecha reemplazan el uso operativo de `empleado_rutinas`, conservado como legado
+sin backfill. Nuevo día sin selecciones; historial con pendientes reales desde
+su asignación. Calendario único, diálogo GNS y cancelación sólo de urgencias
+pendientes de hoy en UI/servidor. Ver alcance actualizado en Etapa 5.
+
 Intervención posterior solicitada el 20 de octubre: reinicio diario de tareas y
 calendario con indicadores, acotados al alcance autorizado en
 `docs/stages/05-auditoria-actividad-calendario.md`. Etapa 4 se conserva aprobada;

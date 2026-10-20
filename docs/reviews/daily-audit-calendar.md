@@ -1,5 +1,26 @@
 # Reinicio diario y calendario — 20 de octubre de 2026
 
+## Seguimiento autorizado: asignaciones diarias reales
+
+Aplicado directamente en Supabase `20261020000000_daily_assignments.sql`,
+en una transacción: RLS FORCE, SELECT autenticado sin escrituras directas,
+RPC administrativa por fecha argentina y snapshot de IDs de tareas; cero filas
+iniciales y huellas de las seis tablas anteriores intactas. Readback confirma
+permisos mínimos y bloqueo de cancelación histórica/completada en servidor.
+Legado sin fecha conservado, sin inventar asignaciones. Calendario único,
+diálogo GNS, nombres de colores simples y mensajes sin “bytes”.
+
+Lint/build PASS (se conserva advertencia previa de bundle >500 kB).
+Tester aprobó 27 casos distintos: corrida focal 25/27 y repetición puntual
+4/4 tras ajustar sesión sintética al simular mañana y repetir navegación/HMR.
+Comandos: Playwright sobre `daily-audit`, `account-management`,
+`routine-colors-enabled`, `routine-colors-disabled` y `panels` con `--workers=2`;
+repetición `--grep 'comienzan vacías|diálogo de contraseña|accesibilidad y responsive' --workers=1`.
+Axe sin violaciones serias/críticas claro/oscuro 375/1440. Reviewer independiente
+aprueba el gate focal tras readback. No hubo escrituras de prueba en producción.
+Lo siguiente conserva la evidencia de la primera intervención, anterior a la
+decisión de convertir las asignaciones en diarias reales.
+
 ## Alcance y contrato
 
 Intervención acotada solicitada después del despliegue aprobado de Etapa 4.

@@ -1,10 +1,10 @@
 export const DEFAULT_ROUTINE_COLOR = "copper";
 
 export const ROUTINE_COLOR_OPTIONS = [
-  { id: "copper", label: "Cobre (predeterminado)" },
-  { id: "sage", label: "Verde salvia" },
-  { id: "steel", label: "Azul acero" },
-  { id: "plum", label: "Ciruela" },
+  { id: "copper", label: "Cobre" },
+  { id: "sage", label: "Verde" },
+  { id: "steel", label: "Azul" },
+  { id: "plum", label: "Violeta" },
 ];
 
 const ROUTINE_COLOR_IDS = new Set(ROUTINE_COLOR_OPTIONS.map(({ id }) => id));

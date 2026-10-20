@@ -64,7 +64,7 @@ test.describe("Administración segura de cuentas", () => {
     await page.getByLabel("Repetir contraseña").fill("muy-corta");
     await page.getByRole("button", { name: "Crear cuenta" }).click();
 
-    await expect(page.getByRole("alert")).toContainText("entre 12 y 72");
+    await expect(page.getByRole("alert")).toContainText("demasiado corta");
     expect(supabaseMock.adminActions).toEqual([]);
   });
 

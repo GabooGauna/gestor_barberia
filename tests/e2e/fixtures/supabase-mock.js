@@ -26,8 +26,7 @@ function authUser(authUserId, username) {
 
 // Existing business fixtures represent a session already upgraded by MFA.
 // MFA-specific tests explicitly use aal1 and exercise challenge/verification.
-function sessionFor(user, { expired = false, aal = "aal2" } = {}) {
-  const expiresAt = Math.floor(Date.now() / 1000) + (expired ? -120 : 3600);
+function sessionFor(user, { expired = false, aal = "aal2", expiresAt = Math.floor(Date.now() / 1000) + (expired ? -120 : 3600) } = {}) {
   return {
     access_token: jwtFor(user.id, expiresAt, aal),
     refresh_token: expired ? "expired-refresh-token" : `refresh-${user.id}`,
@@ -134,10 +133,27 @@ class SupabaseMock {
   async handleRpc(route, request, rpc) {
     const body = request.postDataJSON?.() ?? {}; const authUserId = authUserIdFromRequest(request);
     this.rpcCalls.push({ rpc, body, authUserId });
+    const delay = this.delays.get(rpc); if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+    if (this.failures.has(rpc)) {
+      await route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ message: this.failures.get(rpc) }) }); return;
+    }
     if (rpc === "get_current_employee_profile") {
       const profile = this.users.get(authUserId)?.profile;
       const result = profile?.activo ? [{ id: profile.id, nombre: profile.nombre, usuario: profile.usuario, rol: profile.rol, activo: true }] : [];
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(result) }); return;
+    }
+    if (rpc === "set_daily_routine_assignment") {
+      const current = this.tables.get("asignaciones_diarias") || [];
+      const existing = current.find((row) => row.empleado_id === body.p_empleado_id && row.rutina_id === body.p_rutina_id && row.fecha === body.p_fecha);
+      if (existing) existing.cancelada_en = body.p_assigned ? null : `${body.p_fecha}T15:00:00Z`;
+      else if (body.p_assigned) current.push({ id: `daily-${current.length + 1}`, empleado_id: body.p_empleado_id, rutina_id: body.p_rutina_id, fecha: body.p_fecha, cancelada_en: null,
+        tarea_ids: (this.tables.get("rutinas") || []).find(({ id }) => id === body.p_rutina_id)?.tareas_rutina?.map(({ id }) => id) || [] });
+      this.tables.set("asignaciones_diarias", current);
+      await route.fulfill({ status: 200, contentType: "application/json", body: "null" }); return;
+    }
+    if (rpc === "cancel_urgent_task") {
+      const task = (this.tables.get("tareas_urgentes") || []).find(({ id }) => id === body.p_urgent_id);
+      if (task) task.cancelada_en = `${task.fecha}T15:00:00Z`;
     }
     if (["set_task_completion", "set_urgent_completion", "cancel_urgent_task"].includes(rpc)) {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) }); return;
@@ -205,6 +221,7 @@ class SupabaseMock {
     }
     let rows = applyFilters(this.tables.get(table) ?? [], url.searchParams);
     const selection = url.searchParams.get("select") || "";
+    if (selection.includes("rutinas(")) rows = rows.map((row) => ({ ...row, rutinas: row.rutinas || (this.tables.get("rutinas") || []).find(({ id }) => id === row.rutina_id) || null }));
     if (selection.includes("empleados(")) rows = rows.map((row) => ({ ...row, empleados: row.empleados || (this.tables.get("empleados") || []).find(({ id }) => id === row.empleado_id) || null }));
     if (selection.includes("tareas_rutina(")) rows = rows.map((row) => {
       if (row.tareas_rutina) return row;

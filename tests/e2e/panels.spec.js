@@ -35,7 +35,7 @@ test("recorre los componentes principales del panel administrador", async ({
 
   await page.getByRole("button", { name: /Asignaciones/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Asignación de Rutinas al Personal" }),
+    page.getByRole("heading", { name: "Asignaciones del día" }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: /Urgencias/ }).click();

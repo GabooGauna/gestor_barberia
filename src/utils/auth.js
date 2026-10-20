@@ -17,8 +17,11 @@ export function technicalAuthEmail(username) {
 
 export function passwordValidationError(password) {
   const byteLength = new TextEncoder().encode(password).length;
-  if (byteLength < 12 || byteLength > 72) {
-    return "La contraseña debe tener entre 12 y 72 bytes.";
+  if (byteLength < 12) {
+    return "La contraseña es demasiado corta. Probá con 12 caracteres o más.";
+  }
+  if (byteLength > 72) {
+    return "La contraseña es demasiado larga. Probá con menos caracteres.";
   }
   const classes = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/]
     .filter((pattern) => pattern.test(password)).length;

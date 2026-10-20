@@ -19,13 +19,13 @@ async function seedAdminPanel(page, supabaseMock) {
   supabaseMock.setTable("empleados", [admin]);
   supabaseMock.setTable("rutinas", []);
   supabaseMock.setTable("tareas_rutina", []);
-  supabaseMock.setTable("empleado_rutinas", []);
+  supabaseMock.setTable("asignaciones_diarias", []);
   supabaseMock.setTable("auditoria_diaria", []);
   supabaseMock.setTable("tareas_urgentes", []);
 }
 
 function seedVisualData(supabaseMock, populated = false) {
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date());
   supabaseMock.setTable("empleados", populated ? [admin, empleado] : []);
   supabaseMock.setTable(
     "rutinas",
@@ -54,11 +54,11 @@ function seedVisualData(supabaseMock, populated = false) {
   );
   supabaseMock.setTable("tareas_rutina", []);
   supabaseMock.setTable(
-    "empleado_rutinas",
+    "asignaciones_diarias",
     populated
       ? [
           {
-            id: "asignacion-1",
+            id: "asignacion-1", tarea_ids: ["tarea-1", "tarea-2"], fecha: today, cancelada_en: null,
             empleado_id: empleado.id,
             rutina_id: "rutina-1",
           },
@@ -95,12 +95,12 @@ function seedVisualData(supabaseMock, populated = false) {
 }
 
 async function seedPopulatedAudit(page, supabaseMock) {
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date());
   await seedAuthSession(page, supabaseMock, admin);
   supabaseMock.setTable("empleados", [empleado]);
-  supabaseMock.setTable("empleado_rutinas", [
+  supabaseMock.setTable("asignaciones_diarias", [
     {
-      id: "asignacion-1",
+      id: "asignacion-1", tarea_ids: ["tarea-1", "tarea-2"], fecha: today, cancelada_en: null,
       empleado_id: empleado.id,
       rutina_id: "rutina-1",
     },
