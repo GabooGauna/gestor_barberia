@@ -68,7 +68,7 @@ export default function AsignarRutinas() {
 
   const employee = catalog.employees.find((person) => person.id === employeeId);
   return (
-    <section className="daily-assignments bg-white p-6 rounded-xl shadow border border-gray-100 space-y-6" aria-label="Asignaciones diarias">
+    <section className="daily-assignments surface-panel p-6 space-y-6" aria-label="Asignaciones diarias">
       <div>
         <h3 className="text-xl font-bold">Asignaciones del día</h3>
         <p className="text-sm text-gray-500 mt-1">{today.split("-").reverse().join("/")} · Elegí las rutinas que debe realizar cada integrante hoy.</p>
@@ -83,7 +83,7 @@ export default function AsignarRutinas() {
             {catalog.employees.map((person) => (
               <button type="button" key={person.id} aria-pressed={person.id === employeeId} disabled={saving}
                 onClick={() => setEmployeeId(person.id)}
-                className={`p-3 text-left rounded-xl border-2 ${person.id === employeeId ? "bg-blue-50 border-blue-500 text-blue-900" : "bg-gray-50 border-gray-200 text-gray-700"}`}>
+                className={`choice-card p-3 text-left rounded-xl border-2 ${person.id === employeeId ? "bg-blue-50 border-blue-500 text-blue-900" : "bg-gray-50 border-gray-200 text-gray-700"}`}>
                 <span className="block font-semibold">{person.nombre}</span>
                 <span className="text-xs">{person.rol === "admin" ? "Administración" : "Empleado"}</span>
               </button>
@@ -101,7 +101,7 @@ export default function AsignarRutinas() {
               const assigned = selection.ids.includes(routine.id);
               return <button type="button" key={routine.id} aria-pressed={assigned} disabled={saving}
                 onClick={() => toggleRoutine(routine.id)}
-                className={`w-full text-left flex items-center justify-between p-4 rounded-xl border-2 ${assigned ? "bg-blue-50 border-blue-400 text-blue-900" : "bg-white border-gray-200 text-gray-600"}`}>
+                className={`choice-card w-full text-left flex items-center justify-between p-4 rounded-xl border-2 ${assigned ? "bg-blue-50 border-blue-400 text-blue-900" : "bg-white border-gray-200 text-gray-600"}`}>
                 <span>{routine.titulo}</span><span aria-hidden="true">{assigned ? "✓" : "+"}</span>
               </button>;
             })}

@@ -49,7 +49,7 @@ export default function RegistroEmpleados({ onEmpleadoCreado }) {
   };
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
+    <div className="surface-panel p-6">
       <h3 className="text-lg font-bold text-gray-800 mb-1">Registrar integrante</h3>
       <p className="text-xs text-gray-500 mb-4">Creá su perfil y definí una contraseña inicial.</p>
 

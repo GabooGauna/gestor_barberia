@@ -174,7 +174,7 @@ export default function PanelEmpleado({ usuario }) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow">
+      <div className="surface-panel p-6">
         <h2 className="text-xl font-bold text-gray-800 mb-1">
           Mis Protocolos Asignados
         </h2>
@@ -202,7 +202,7 @@ export default function PanelEmpleado({ usuario }) {
                   key={urg.id}
                   onClick={() => toggleTarea(urg.id, true)}
                   aria-pressed={Boolean(estaLista)}
-                  className={`w-full text-left flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  className={`task-toggle w-full text-left flex items-center justify-between p-4 rounded-xl border-2 ${
                     estaLista
                       ? "bg-green-50 border-green-300 text-green-900"
                       : "bg-white border-amber-300 hover:border-amber-400 text-amber-950 shadow-sm"
@@ -237,14 +237,14 @@ export default function PanelEmpleado({ usuario }) {
 
       {/* Rutinas Asignadas Normales */}
       {rutinasAsignadas.length === 0 && tareasUrgentes.length === 0 ? (
-        <div className="bg-white p-8 rounded-xl shadow text-center text-gray-400">
+        <div className="surface-panel p-8 text-center text-gray-400">
           <p>No tienes tareas ni rutinas asignadas en este momento.</p>
         </div>
       ) : (
         rutinasAsignadas.map((rutina) => (
           <div
             key={rutina.id}
-            className={`${routineColorClass(rutina.color)} bg-white rounded-xl shadow overflow-hidden`}
+            className={`surface-panel ${routineColorClass(rutina.color)} overflow-hidden`}
           >
             <div className="bg-gray-800 text-white px-6 py-3 font-semibold text-lg flex items-center gap-3">
               <span
@@ -269,7 +269,7 @@ export default function PanelEmpleado({ usuario }) {
                         key={tarea.id}
                         onClick={() => toggleTarea(tarea.id, false)}
                         aria-pressed={Boolean(estaLista)}
-                        className={`w-full text-left flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        className={`task-toggle w-full text-left flex items-center justify-between p-4 rounded-xl border-2 ${
                           estaLista
                             ? "bg-green-50 border-green-300 text-green-900"
                             : `${estiloSeccion.bg} hover:shadow-sm`

@@ -400,7 +400,7 @@ export default function PanelAdmin() {
       {/* VISTA 1: Creador de Plantillas */}
       {vistaActiva === "plantillas" && (
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-xl shadow">
+          <div className="surface-panel p-6">
             <h2 className="text-xl font-bold text-gray-800 mb-4">
               Creador de Plantillas (SOP)
             </h2>
@@ -444,7 +444,7 @@ export default function PanelAdmin() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-xl shadow">
+            <div className="surface-panel p-6">
               <h3 className="text-lg font-bold text-gray-800 mb-4">
                 Rutinas registradas
               </h3>
@@ -463,7 +463,7 @@ export default function PanelAdmin() {
                 {!cargandoRutinas && rutinas.map((rutina) => (
                   <div
                     key={rutina.id}
-                    className={`${routineColorClass(rutina.color)} rounded-lg border transition-all flex justify-between items-center ${
+                    className={`routine-choice ${routineColorClass(rutina.color)} rounded-lg border flex justify-between items-center ${
                       rutinaSeleccionada?.id === rutina.id
                         ? "bg-blue-50 border-blue-500 text-blue-900 font-semibold"
                         : "bg-gray-50 border-gray-200 hover:border-gray-300 text-gray-700"
@@ -495,7 +495,7 @@ export default function PanelAdmin() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl shadow">
+            <div className="surface-panel p-6">
               {rutinaSeleccionada ? (
                 <div>
                   <h3 className="text-lg font-bold text-gray-800 mb-1">
@@ -550,7 +550,7 @@ export default function PanelAdmin() {
                     <button
                       type="submit"
                       disabled={accionPendiente === "agregar-tarea" || !nuevaSeccion.trim() || !nuevaDescripcion.trim()}
-                      className="w-full bg-gray-800 text-white text-sm font-medium py-2 rounded hover:bg-gray-900 transition-colors"
+                      className="button button--neutral w-full text-sm"
                     >
                       {accionPendiente === "agregar-tarea" ? "Agregando tarea…" : "+ Agregar tarea"}
                     </button>
@@ -612,7 +612,7 @@ export default function PanelAdmin() {
         <div className="team-management">
           <RegistroEmpleados onEmpleadoCreado={cargarEmpleados} />
 
-          <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
+          <div className="surface-panel p-6">
             <h3 className="text-lg font-bold text-gray-800 mb-1">Personal registrado</h3>
             <p className="text-xs text-gray-500 mb-4">El estado y los permisos se validan en la base de datos.</p>
 

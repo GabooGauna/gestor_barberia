@@ -29,6 +29,14 @@ Reviewer independiente revisará después de las validaciones.
 
 ## Dependencias
 
+Refinamiento visual general autorizado el 20 de octubre: login, panel admin,
+empleados, rutinas, asignaciones, urgencias y auditoría. Conservar estructura,
+funcionalidades, identidad negro/cobre y ambos temas; ajustar tokens, controles,
+profundidad, jerarquía y microinteracciones con movimiento reducido. Incluye
+capturas locales, lint/build, verificaciones puntuales y commit/push a GitHub
+para Vercel. Sin cambios en Supabase, migraciones ni lógica de negocio.
+Dirección y evidencia en `docs/reviews/visual-polish.md`. No cierra toda Etapa 5.
+
 Intervención visual adicional autorizada el 20 de octubre: en el detalle de
 Auditoría, agrupar por identidad de rutina, ordenar rutinas por título y tareas
 por `orden`, con desempate por descripción/ID. Separar emergencias en un bloque

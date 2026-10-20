@@ -10,6 +10,12 @@
 
 ## Estado local de Etapa 4
 
+Seguimiento visual general del 20 de octubre, autorizado en el alcance acotado
+de Etapa 5: refinamiento de controles, superficies, fondos, navegación y
+tipografía en las pantallas existentes, conservando estructura y funcionalidad.
+Sin cambios de backend ni Supabase. Dirección, pruebas y revisión en
+`docs/reviews/visual-polish.md`; no implica cierre completo de Etapa 5.
+
 Intervención visual del 20 de octubre en el alcance acotado de Etapa 5:
 Auditoría presenta detalles agrupados por rutina (identidad, título y orden de
 tareas), con colores configurados y emergencias en un bloque separado.

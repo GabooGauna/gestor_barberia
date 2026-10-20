@@ -63,7 +63,7 @@ export default function EnviarTareaUrgente() {
   };
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow border border-amber-100 space-y-4">
+    <div className="surface-panel p-6 space-y-4">
       <div>
         <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
           <span>🚨</span> Enviar Tarea Urgente / Ad-Hoc
@@ -76,7 +76,7 @@ export default function EnviarTareaUrgente() {
 
       <form onSubmit={enviarUrgencia} className="space-y-4">
         <div>
-          <label htmlFor="urgent-employee" className="block text-xs font-semibold text-gray-600 uppercase mb-1">
+          <label htmlFor="urgent-employee" className="block text-sm font-semibold text-gray-600 mb-1">
             Seleccionar Empleado
           </label>
           <select
@@ -95,7 +95,7 @@ export default function EnviarTareaUrgente() {
         </div>
 
         <div>
-          <label htmlFor="urgent-description" className="block text-xs font-semibold text-gray-600 uppercase mb-1">
+          <label htmlFor="urgent-description" className="block text-sm font-semibold text-gray-600 mb-1">
             Descripción de la Urgencia
           </label>
           <textarea
@@ -124,7 +124,7 @@ export default function EnviarTareaUrgente() {
         <button
           type="submit"
           disabled={cargando}
-          className="w-full bg-amber-600 text-white font-medium py-3 rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 text-sm shadow-md"
+          className="button button--warning w-full text-sm"
         >
           {cargando ? "Enviando..." : "Enviar Alerta Urgente"}
         </button>
