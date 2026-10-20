@@ -10,6 +10,10 @@
 
 ## Estado local de Etapa 4
 
+Seguimiento visual del 20 de octubre: acciones de Equipo alineadas al selector
+de rol y logo móvil dentro del flujo para respetar el padding de la cabecera.
+Sólo CSS; evidencia local en `docs/reviews/control-sizing-mobile-nav.md`.
+
 Seguimiento visual general del 20 de octubre, autorizado en el alcance acotado
 de Etapa 5: refinamiento de controles, superficies, fondos, navegación y
 tipografía en las pantallas existentes, conservando estructura y funcionalidad.

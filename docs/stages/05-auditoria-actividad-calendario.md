@@ -29,6 +29,11 @@ Reviewer independiente revisará después de las validaciones.
 
 ## Dependencias
 
+Seguimiento visual solicitado el 20 de octubre: compactar las acciones de
+Equipo mostradas en la captura y dejar padding efectivo alrededor del logo
+del nav móvil. Sólo CSS, con validación local; evidencia en
+`docs/reviews/control-sizing-mobile-nav.md`. No cierra toda Etapa 5.
+
 Refinamiento visual general autorizado el 20 de octubre: login, panel admin,
 empleados, rutinas, asignaciones, urgencias y auditoría. Conservar estructura,
 funcionalidades, identidad negro/cobre y ambos temas; ajustar tokens, controles,

@@ -905,8 +905,13 @@ button:disabled {
 .team-row__controls {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-end;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.team-row__controls .button {
+  padding-block: 0.4rem;
 }
 
 .team-row__controls label {
@@ -1256,7 +1261,7 @@ textarea::placeholder { color: var(--ink-faint); }
     z-index: 30;
     display: grid;
     min-height: 4.75rem;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
     padding: 0.65rem 1rem;
     border-bottom: 1px solid rgb(255 255 255 / 9%);
@@ -1264,16 +1269,15 @@ textarea::placeholder { color: var(--ink-faint); }
   }
 
   .brand-logo--mobile {
-    position: absolute;
-    left: 50%;
+    grid-column: 2;
     width: 7.75rem;
     max-height: 6rem;
-    transform: translateX(-50%);
   }
 
   .user-menu--mobile {
+    position: static;
     display: block;
-    grid-column: 2;
+    grid-column: 3;
     justify-self: end;
   }
 
@@ -1284,8 +1288,8 @@ textarea::placeholder { color: var(--ink-faint); }
   }
 
   .user-menu--mobile .user-menu__panel {
-    position: fixed;
-    top: 4.35rem;
+    position: absolute;
+    top: calc(100% + 0.5rem);
     right: 0.75rem;
   }
 
