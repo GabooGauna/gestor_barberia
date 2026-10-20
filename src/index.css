@@ -1305,6 +1305,14 @@ textarea::placeholder { color: var(--ink-faint); }
 .audit-action-error { background: var(--danger-soft); color: var(--danger); }
 .audit-employee-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
 .audit-employee-summary h3 { margin-right: auto; }
+.audit-detail, .audit-routines { display: grid; gap: 1rem; min-width: 0; }
+.audit-detail { margin-top: 1.25rem; }
+.audit-detail-heading, .audit-task-group h5 { font-weight: 700; overflow-wrap: anywhere; }
+.audit-task-group { min-width: 0; padding: .85rem 1rem; background: var(--surface-1); }
+.audit-task-group .audit-task-list { margin-top: .65rem; }
+.audit-task-group .audit-task:last-child { border-bottom: 0; padding-bottom: 0; }
+.audit-emergencies { border-left: 4px solid var(--danger); background: var(--danger-soft); }
+.audit-emergencies > h4 { color: var(--danger); }
 .audit-task-list { margin-top: 1rem; padding: 0; list-style: none; border-top: 1px solid var(--line); }
 .audit-task { display: flex; align-items: center; gap: .75rem; padding: 1rem 0; border-bottom: 1px solid var(--line); }
 .audit-task > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }

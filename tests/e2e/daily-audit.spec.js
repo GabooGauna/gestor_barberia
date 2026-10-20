@@ -182,6 +182,56 @@ test("auditoría sigue hoy al cambiar día y conserva una fecha histórica elegi
   await expect(page.getByRole("heading", { name: "Registros del 19/10/2026" })).toBeVisible();
 });
 
+for (const colorsEnabled of [false, true]) {
+  for (const theme of ["light", "dark"]) {
+    test(`detalle agrupado por rutinas y emergencias: ${theme}, colores ${colorsEnabled}`, async ({ page, supabaseMock }, testInfo) => {
+      await page.clock.setFixedTime(new Date("2026-10-20T04:00:00Z"));
+      await page.addInitScript((value) => localStorage.setItem("gestor-tema", value), theme);
+      seedWork(supabaseMock);
+      const routines = [
+        { id: "z", titulo: "Cierre", color: "plum", tareas_rutina: [{ id: "last", descripcion: "Cerrar local", orden: 1 }] },
+        { id: "a", titulo: "Apertura", color: "steel", tareas_rutina: [
+          { id: "second", descripcion: "Segunda tarea", orden: 2 },
+          { id: "first", descripcion: "Primera tarea", orden: 1 },
+        ] },
+        { id: "b", titulo: "Apertura", color: "sage", tareas_rutina: [] },
+      ];
+      supabaseMock.setTable("rutinas", routines);
+      supabaseMock.setTable("asignaciones_diarias", routines.map((item) => ({
+        id: item.id, empleado_id: employee.id, rutina_id: item.id, fecha: "2026-10-20",
+        tarea_ids: item.tareas_rutina.map(({ id }) => id), cancelada_en: item.id === "z" ? "2026-10-20T04:00:00Z" : null,
+      })));
+      // A legacy completion joins the same routine, without a daily assignment.
+      supabaseMock.setTable("auditoria_diaria", [{ id: "legacy", tarea_id: "legacy-task", empleado_id: employee.id, fecha: "2026-10-20", anulada_en: "2026-10-20T04:00:00Z", tareas_rutina: { id: "legacy-task", descripcion: "Tercera tarea histórica", orden: 3, rutinas: routines[1] } }]);
+      await seedAuthSession(page, supabaseMock, admin);
+      await page.goto(`http://127.0.0.1:${colorsEnabled ? 4174 : 4173}/panel`);
+      await page.getByRole("button", { name: /^Auditoría/ }).click();
+      await page.getByRole("button", { name: /Ver detalle de tareas/ }).click();
+      const groups = page.locator(".audit-routines .audit-task-group");
+      await expect(groups.locator("h5")).toHaveText(["Apertura", "Apertura", "Cierre"]);
+      await expect(groups.nth(0).locator(".audit-task > div > p:last-child")).toHaveText(["Primera tarea", "Segunda tarea", "Tercera tarea histórica"]);
+      await expect(groups.nth(0)).toHaveClass(new RegExp(`routine-accent--${colorsEnabled ? "steel" : "copper"}`));
+      await expect(groups.nth(1)).toContainText("Esta rutina no tenía tareas al asignarse.");
+      await expect(groups.nth(2)).toContainText("Asignación cancelada");
+      await expect(groups.nth(0)).toContainText("Anulado");
+      const emergencies = page.getByRole("region", { name: "Emergencias / tareas urgentes", exact: true });
+      await expect(emergencies).toContainText("Indicación del martes");
+      await expect(emergencies.locator(".audit-task")).toHaveCount(1);
+      await expect(page.locator(".audit-detail > section").last()).toHaveAttribute("aria-label", "Emergencias / tareas urgentes");
+      const reads = supabaseMock.requests.filter(({ table, method }) => method === "GET" && ["auditoria_diaria", "asignaciones_diarias"].includes(table));
+      expect(reads.some(({ url }) => new URL(url).searchParams.get("select").includes(",color"))).toBe(colorsEnabled);
+      for (const width of [375, 1440]) {
+        await page.setViewportSize({ width, height: 1000 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+        const result = await new AxeBuilder({ page }).analyze();
+        expect(result.violations.filter(({ impact }) => ["serious", "critical"].includes(impact))).toEqual([]);
+        await page.screenshot({ path: testInfo.outputPath(`grupos-${width}.png`), fullPage: true });
+      }
+      expect(supabaseMock.mutations).toEqual([]);
+    });
+  }
+}
+
 for (const theme of ["light", "dark"]) {
   test(`calendario ${theme}: puntos reales, selección histórica y mes acotado`, async ({ page, supabaseMock }) => {
     await page.clock.setFixedTime(new Date("2026-10-20T04:00:00Z"));

@@ -29,6 +29,14 @@ Reviewer independiente revisará después de las validaciones.
 
 ## Dependencias
 
+Intervención visual adicional autorizada el 20 de octubre: en el detalle de
+Auditoría, agrupar por identidad de rutina, ordenar rutinas por título y tareas
+por `orden`, con desempate por descripción/ID. Separar emergencias en un bloque
+propio al final. Reutilizar colores configurados con capacidad ON y fallback
+Cobre con capacidad OFF, sin leer `color` en ese caso. Mantener estados,
+históricos, cancelaciones y permisos. Incluye pruebas locales, commit y push;
+sin migraciones ni cambios remotos de datos. No cierra toda Etapa 5.
+
 Actualización autorizada el 20 de octubre: el propietario eligió asignaciones
 diarias reales y autorizó directamente el SQL mínimo en Supabase, commit/push.
 Sustituye la configuración permanente como fuente del trabajo actual: tabla

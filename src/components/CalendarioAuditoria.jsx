@@ -3,6 +3,7 @@ import { supabase } from "../services/supabase";
 import { useBusinessDate } from "../hooks/useBusinessDate";
 import { currentBusinessDate } from "../utils/businessDate";
 import ConfirmationDialog from "./ConfirmationDialog";
+import { ROUTINE_COLORS_ENABLED, routineColorClass } from "../utils/coloresRutina";
 
 const PAGE_SIZE = 500;
 
@@ -59,6 +60,9 @@ function groupRecords(audits, urgentTasks, assignments, auditsAvailable = true) 
         id: `assignment-${assignment.id}-${id}`,
         description: task?.descripcion || "Tarea sin descripción disponible",
         routine: routine?.titulo || "Rutina asignada",
+        routineId: assignment.rutina_id,
+        color: routine?.color,
+        order: task?.orden,
         section: task?.seccion,
         status: cancelled ? (completed ? "Asignación cancelada · Completado" : "Asignación cancelada") : !auditsAvailable ? "Estado sin verificar" : completed ? "Completado ✓" : "Pendiente ⏳",
         completed: completed && !cancelled,
@@ -69,6 +73,8 @@ function groupRecords(audits, urgentTasks, assignments, auditsAvailable = true) 
       id: `assignment-${assignment.id}`,
       description: "Esta rutina no tenía tareas al asignarse.",
       routine: routine?.titulo || "Rutina asignada",
+      routineId: assignment.rutina_id,
+      color: routine?.color,
       status: assignment.cancelada_en ? "Asignación cancelada" : "Sin tareas",
       completed: false, inactive: Boolean(assignment.cancelada_en), counted: false,
     });
@@ -78,6 +84,9 @@ function groupRecords(audits, urgentTasks, assignments, auditsAvailable = true) 
     id: `audit-${record.id}`,
     description: record.tareas_rutina?.descripcion || "Tarea sin descripción disponible",
     routine: record.tareas_rutina?.rutinas?.titulo || "Rutina",
+    routineId: record.tareas_rutina?.rutinas?.id,
+    color: record.tareas_rutina?.rutinas?.color,
+    order: record.tareas_rutina?.orden,
     section: record.tareas_rutina?.seccion,
     status: record.anulada_en ? "Anulado" : "Completado ✓",
     completed: !record.anulada_en,
@@ -94,6 +103,23 @@ function groupRecords(audits, urgentTasks, assignments, auditsAvailable = true) 
     inactive: Boolean(record.cancelada_en),
   }));
   return [...employees.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+}
+
+function taskGroups(tasks) {
+  const routines = new Map();
+  const emergencies = [];
+  tasks.forEach((task) => {
+    if (task.urgentId) {
+      emergencies.push(task);
+      return;
+    }
+    const key = task.routineId || "unavailable";
+    if (!routines.has(key)) routines.set(key, { id: key, title: task.routine, color: task.color, tasks: [] });
+    routines.get(key).tasks.push(task);
+  });
+  const groups = [...routines.values()].sort((a, b) => a.title.localeCompare(b.title, "es") || a.id.localeCompare(b.id));
+  groups.forEach((group) => group.tasks.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || a.description.localeCompare(b.description, "es") || a.id.localeCompare(b.id)));
+  return { routines: groups, emergencies };
 }
 
 export default function CalendarioAuditoria({ onAssign }) {
@@ -139,13 +165,13 @@ export default function CalendarioAuditoria({ onAssign }) {
       try {
         const results = await Promise.allSettled([
           readPages(() => supabase.from("auditoria_diaria")
-            .select("id,tarea_id,empleado_id,anulada_en,empleados(id,nombre,rol),tareas_rutina(id,seccion,descripcion,rutinas(id,titulo))")
+            .select(`id,tarea_id,empleado_id,anulada_en,empleados(id,nombre,rol),tareas_rutina(id,seccion,descripcion,orden,rutinas(id,titulo${ROUTINE_COLORS_ENABLED ? ",color" : ""}))`)
             .eq("fecha", date), controller.signal),
           readPages(() => supabase.from("tareas_urgentes")
             .select("id,fecha,empleado_id,descripcion,completada,cancelada_en,empleados(id,nombre,rol)")
             .eq("fecha", date), controller.signal),
           readPages(() => supabase.from("asignaciones_diarias")
-            .select("id,empleado_id,rutina_id,fecha,cancelada_en,tarea_ids,empleados(id,nombre),rutinas(id,titulo,tareas_rutina(id,seccion,descripcion,orden))")
+            .select(`id,empleado_id,rutina_id,fecha,cancelada_en,tarea_ids,empleados(id,nombre),rutinas(id,titulo${ROUTINE_COLORS_ENABLED ? ",color" : ""},tareas_rutina(id,seccion,descripcion,orden))`)
             .eq("fecha", date), controller.signal),
         ]);
         const failed = results.filter((result) => result.status === "rejected").length;
@@ -255,6 +281,14 @@ export default function CalendarioAuditoria({ onAssign }) {
         ) : dayResult.employees.length === 0 ? <p className="audit-empty">{dayResult.partial ? "No hay registros disponibles en las fuentes que se pudieron consultar." : "No hay tareas asignadas ni cumplimiento registrado para esta fecha."}</p> : dayResult.employees.map((employee) => {
           const completed = employee.tasks.filter((task) => task.completed).length;
           const active = employee.tasks.filter((task) => !task.inactive && task.counted !== false).length;
+          const { routines, emergencies } = taskGroups(employee.tasks);
+          const renderTasks = (tasks) => <ul className="audit-task-list">{tasks.map((task) => (
+            <li key={task.id} className="audit-task">
+              <div>{task.section && <p className="audit-task-context">{task.section}</p>}<p>{task.description}</p></div>
+              <span className={`audit-task-status ${task.inactive ? "audit-task-status--inactive" : task.completed ? "audit-task-status--complete" : "audit-task-status--pending"}`}>{task.status}</span>
+              {canCancel(task) && <button className="button button--danger" disabled={Boolean(cancelling)} aria-label={`Cancelar tarea urgente: ${task.description}`} onClick={() => requestCancellation(task)}>{cancelling === task.urgentId ? "Cancelando..." : "Cancelar"}</button>}
+            </li>
+          ))}</ul>;
           return (
             <article key={employee.id} className="audit-employee">
               <div className="audit-employee-summary">
@@ -264,13 +298,19 @@ export default function CalendarioAuditoria({ onAssign }) {
                   {expanded[employee.id] ? "Ocultar detalle de tareas ▲" : "Ver detalle de tareas ▼"}
                 </button>
               </div>
-              {expanded[employee.id] && <ul className="audit-task-list">{employee.tasks.map((task) => (
-                <li key={task.id} className="audit-task">
-                  <div><p className="audit-task-context">{task.routine}{task.section ? ` · ${task.section}` : ""}</p><p>{task.description}</p></div>
-                  <span className={`audit-task-status ${task.inactive ? "audit-task-status--inactive" : task.completed ? "audit-task-status--complete" : "audit-task-status--pending"}`}>{task.status}</span>
-                  {canCancel(task) && <button className="button button--danger" disabled={Boolean(cancelling)} aria-label={`Cancelar tarea urgente: ${task.description}`} onClick={() => requestCancellation(task)}>{cancelling === task.urgentId ? "Cancelando..." : "Cancelar"}</button>}
-                </li>
-              ))}</ul>}
+              {expanded[employee.id] && <div className="audit-detail">
+                {routines.length > 0 && <section aria-label="Rutinas" className="audit-routines">
+                  <h4 className="audit-detail-heading">Rutinas</h4>
+                  {routines.map((group) => <section key={group.id} aria-label={`Rutina: ${group.title}`} className={`audit-task-group ${routineColorClass(ROUTINE_COLORS_ENABLED ? group.color : undefined)}`}>
+                    <h5>{group.title}</h5>
+                    {renderTasks(group.tasks)}
+                  </section>)}
+                </section>}
+                {emergencies.length > 0 && <section aria-label="Emergencias / tareas urgentes" className="audit-task-group audit-emergencies">
+                  <h4 className="audit-detail-heading">Emergencias / tareas urgentes</h4>
+                  {renderTasks(emergencies)}
+                </section>}
+              </div>}
             </article>
           );
         })}

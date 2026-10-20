@@ -10,6 +10,12 @@
 
 ## Estado local de Etapa 4
 
+Intervención visual del 20 de octubre en el alcance acotado de Etapa 5:
+Auditoría presenta detalles agrupados por rutina (identidad, título y orden de
+tareas), con colores configurados y emergencias en un bloque separado.
+Consultas mantienen fecha/RLS y capacidad de color OFF/ON; sin migraciones.
+Evidencia y límites en `docs/reviews/audit-task-grouping.md`.
+
 Seguimiento del 20 de octubre: el propietario confirmó asignaciones diarias
 reales y SQL mínimo directo en Supabase. `asignaciones_diarias` y su RPC por
 fecha reemplazan el uso operativo de `empleado_rutinas`, conservado como legado

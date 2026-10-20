@@ -373,7 +373,7 @@ for (const viewport of viewportMatrix) {
         {
           slug: "asignaciones",
           button: /Asignaciones/,
-          heading: "Asignación de Rutinas al Personal",
+          heading: "Asignaciones del día",
         },
         {
           slug: "urgencias",
@@ -520,6 +520,8 @@ test.describe("Interacción accesible", () => {
     supabaseMock,
   }) => {
     await seedPopulatedAudit(page, supabaseMock);
+    // Only pending tasks from today expose the cancellation action.
+    supabaseMock.tables.get("tareas_urgentes")[0].completada = false;
     await page.goto("/panel");
     await page.getByRole("button", { name: /Equipo/ }).click();
 
