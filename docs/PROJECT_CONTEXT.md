@@ -10,18 +10,20 @@
 
 ## Estado local de Etapa 4
 
-Checkpoint vigente del 20 de octubre: ambos perfiles existentes vinculados y
-logins reales verificados. Cutover RLS y suplemento operativo aplicados
-atómicamente, RLS FORCE en seis tablas, anon sin grants de negocio y PIN retirado.
-Edge admin-users ACTIVE/verify_jwt=true/origen exacto verificados; pruebas reales
-de mantenimiento/anon/AAL1 pasan para ambos usuarios. Se conservan seis tablas,
-UUID e históricos, incluidas tres asignaciones recuperadas. MFA del propietario
-confirmado por servidor: un factor TOTP verificado y una sesión AAL2.
-Corrección QR/transporte SVG y clave manual sólo RAM aprobada: unit5, lint,
-build y E2E focal2 PASS. Mantenimiento true/in_flight0; aceptación de negocio
-y Edge con AAL2 aún pendiente. Se prepara publicación por la integración
-GitHub–Vercel existente, autorizados commits/push; color sigue independiente.
-La cronología siguiente no autoriza repetir operaciones ya completadas.
+Checkpoint vigente del 20 de octubre: Auth/RLS/Edge aceptados en producción.
+Ambos perfiles conservan UUID; seis conjuntos históricos y tres asignaciones
+recuperadas coinciden. Frontend Auth publicado por GitHub–Vercel en `c03511e`;
+propietario completó login y MFA. Pruebas reales: admin AAL2 y empleado AAL1 ven
+exactamente los conjuntos autorizados; perfil ajeno del empleado bloqueado,
+Edge bloquea AAL2 durante mantenimiento y admite/rechaza un destino inexistente
+al abrir, sin mutaciones Auth/negocio. Reviewer aprobó el gate Auth remoto.
+Después se cerró mantenimiento y se aplicó por separado únicamente
+`20261016000000_add_rutinas_color.sql`: ACK, default/constraint y conservación
+íntegra de históricos/UUID verificados. Mantenimiento true/in-flight cero.
+Pendiente variable Production de Vercel true, publicación del artefacto de
+colores, reapertura controlada y comprobación real de edición admin/lectura y
+edición denegada empleado. No Etapa 5. La cronología siguiente no autoriza
+repetir operaciones ya completadas.
 
 Avance remoto posterior: administrador inicial `admin.gns` creado por Admin API
 y vinculado por bootstrap al perfil existente, sin cambiar UUID/históricos.

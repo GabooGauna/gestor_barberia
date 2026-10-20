@@ -1541,3 +1541,171 @@ por este párrafo. Observación documental baja: el runbook Vercel conserva una
 frase histórica de vinculación CLI pendiente pese al header vigente; retirar
 esa parte para coherencia, sin ejecutar CLI ni bloquear la publicación.
 Color continúa independiente/posterior; no Etapa 5 ni producción lista.
+
+## Cliente publicado y aceptación mínima de apertura — 20 de octubre
+
+Orquestador entrega publicación autorizada del commit c03511e, push main,
+Vercel success deployment 4zkLmVx3AELLaohWbzYkkubC9Dm2; dominio HTTP200 y
+asset index-n4vvqqeR.js con Auth/manual MFA/ref correcta. Color OFF verificado
+en ese artefacto. Mantenimiento continúa cerrado. No hay nuevo hallazgo que
+obligue a repetir suites locales, respaldo, expand o provisión. La modificación
+personal preexistente de .codex/config.toml se conserva fuera de publicación.
+
+Aceptación mínima pendiente, sin operaciones destructivas:
+
+1. Propietario confirma login y desafío TOTP en dominio/artefacto publicado,
+   con sesión administrativa AAL2 verificada sin compartir QR/OTP/token.
+2. Con maintenance=true, comprobar para esa sesión AAL2 seis lecturas sin filas
+   y Edge con target sintético rechazado 503/maintenance_active, inflight cero.
+   Demuestra paso de AAL2/rol hasta mantenimiento, sin mutación de negocio.
+3. Apertura explícita limitada a set_security_maintenance(false), con ACK y
+   comprobación fresca del estado; no alterar grants/configuración adicional.
+4. Lecturas inmediatas por rol: admin AAL2 concilia conjuntos UUID/conteos
+   esperados; empleado AAL1 ve sólo perfil/asignaciones propios, rutinas/tareas
+   asignadas no archivadas y auditorías/urgencias propias. Comprobar un filtro
+   ajeno conocido que resulte vacío, sin escribir ni mostrar datos personales.
+
+Ante discrepancia, error o estado incierto, cerrar explícitamente maintenance
+y confirmar por lectura fresca; detener la aceptación. No se exige volver a
+crear usuarios, resetear contraseñas o repetir negativos anon/refresh ya PASS.
+Si se incorpora wrapper de apertura, revisar sólo sus guards/cambio concreto
+antes de usarlo. Estas condiciones no declaran todavía el servicio abierto ni
+aceptado y no incluyen color o Etapa 5.
+
+## Gate cerrado AAL2 de producción confirmado — 20 de octubre
+
+Orquestador entrega aceptación en Chrome controlado del dominio publicado:
+login del propietario y TOTP, GET Auth user 200, perfil RPC admin activo,
+seis lecturas REST limitadas sin filas y POST Edge sobre target sintético
+503/maintenance_active. Sesión usada sólo en RAM sin imprimir credenciales.
+**Cerrados los pasos de login AAL2 y contención del administrador AAL2.**
+No mutaciones de negocio ni reapertura por esta comprobación.
+
+Queda revisión del adaptador mínimo de apertura y lecturas posteriores. El
+wrapper debe comprobar estado previo maintenance=true/inflight cero, permitir
+sólo la RPC de cambio elegida, validar ACK tipado y estado posterior fresco;
+resultado incierto exige conciliación, no retry ciego. Debe conservar cierre
+explícito para cualquier discrepancia de aceptación. No nueva migración o
+auditoría general; se conserva todo PASS previo y color OFF.
+
+## Apertura controlada y lecturas esperadas — revisión previa, 20 de octubre
+
+**Aprobados Inspect y Open -Authorized** del candidato estable
+scripts/stage04-security-maintenance.ps1, condicionado al gate AAL2 productivo
+ya PASS. Reviewer leyó el wrapper completo: ninguna entrada SQL genérica,
+prestate actor/base y estado/singleton/cuentas/vínculos/TOTP/RLS/anon/PIN/color,
+inflight cero; FOR UPDATE del singleton y revalidación en la misma transacción
+antes de la única RPC existente. ACK booleano/conteos estrictos y lectura fresca
+verifican el resultado. Backend entregó AST y ocho casos puros PASS sin fuente.
+Close -Authorized no depende de MFA o color y queda disponible para contención;
+no hay retry o toggle automático ante incertidumbre de COMMIT.
+
+Reviewer aprobó stage04-role-expectations.sql readonly: seis conjuntos agregados
+independientes de RLS/claims según los predicados contractuales de cada rol,
+incluyendo archivado para rutinas/tareas. Lectura real entregada vigente con
+kind/expected_when_open y cardinalidad dos perfiles/un admin/un empleado;
+maintenance_current=true expresa situación actual, no invalida la expectativa
+de lectura abierta. Conteos admin y empleado conocidos y UUID hashes permiten
+conciliación sin retornar nombres o filas sensibles.
+
+**Aprobado EmployeeRead después de abrir**, sólo con esa referencia fresca del
+mismo proyecto/ventana, no JSON arbitrario. Seis GET id ordenados y hash/count,
+filtro explícito al perfil admin ajeno debe devolver vacío y logout de la propia
+sesión. Revisión de conteos endurecida a enteros no negativos, no cast permisivo;
+28 casos del guard, hash vacío y parser focal PASS entregados. Lecturas admin
+AAL2 del navegador se comparan con los seis conjuntos admin. Ante cualquier
+discrepancia, cerrar maintenance explícitamente, confirmar estado por lectura
+y detener la aceptación. No nuevas cuentas, mutaciones de negocio o repetición
+de negativos/refresh/suites/respaldo aprobados. Apertura y lecturas reales aún
+no se atribuyen como ejecutadas en este dictamen.
+
+## Candidato de color separado — revisión previa, 20 de octubre
+
+Revisado runApprovedRoutineColor/inspectRoutineColor y la migración original.
+**Aprobación condicionada, sin ejecución actual:** sólo después de aceptar las
+lecturas Auth por ambos roles y volver a cerrar maintenance/inflight cero,
+authorized=true/authAccepted=true y SHA original
+243940a950e51280b6a892df39f2ccbea67e9bbbfe04de27b338a0d963462b60.
+No descubre ni aplica pendientes por ledger. Fuente exacta, actor/base postgres,
+PIN ausente/FORCE seis/color ausente y fuente sin actividad inesperada; tiempos
+de espera de sesión acotados antes del SQL original y conexión cerrada al final.
+Se revisaron las dos correcciones mínimas solicitadas de actor/base y timeout;
+node check y ocho guards puros PASS entregados, sin nueva suite.
+
+Post exige seis contenidos legados/UUID invariantes, todos copper iniciales,
+NOT NULL/check validado y mantenimiento cerrado. ACK desconocido mantiene cierre
+y exige conciliar sin retry. La migración no habilita por sí sola la UI: bandera
+OFF continúa hasta aceptación independiente. El Open actual está ligado a color
+ausente: no reutilizarlo tras color sin revisar esa delta. No nueva producción
+lista, Etapa 5 ni backup repetido por este candidato.
+
+## Aceptación Auth real y permiso de color separado — 20 de octubre
+
+**Auth/RLS/Edge aceptados en la ventana controlada**, según evidencia real
+entregada por Orquestador: Open único ACK tipado/fresh maintenance=false,
+inflight cero; administrador AAL2 concilia seis conjuntos UUID/counts
+45/3/2/5/53/4, empleado AAL1 concilia 45/3/1/3/36/4 contra referencia independiente,
+perfil admin ajeno vacío y logout de su sesión. Edge AAL2 abierto devuelve
+404/account_not_found para target sintético tras admisión: verifica ruta y rol
+sin cambio de negocio; sólo admisión privada finalizada. Close explícito ACK y
+fresh maintenance=true/inflight cero. Sin discrepancias reportadas; no pruebas
+aprobadas repetidas por Reviewer.
+
+Quedan satisfechas las condiciones anteriores para **ejecutar color separado**
+con el adaptador endurecido ya revisado, authorized/authAccepted verdaderos,
+SHA original exacto y todos sus guards actuales. No otras migraciones ni
+reentrega por ledger; ACK incierto implica cierre/conciliación. No se considera
+color ejecutado todavía. Mantener UI color OFF hasta resultado/aceptación.
+
+Para reapertura posterior se permite preparar únicamente RoutineColorApplied
+en el wrapper: default conserva ausencia de color, switch exige presencia de
+columna NOT NULL, default copper exacto y check de paleta validado. Los demás
+guards y revalidación transaccional deben conservarse. Revisar delta y su foco
+de guard antes de usarla; no nueva suite general ni apertura automática por
+haber aplicado color. El servicio está cerrado al final de la aceptación Auth.
+
+## Color aplicado y reapertura condicionada — 20 de octubre
+
+Orquestador entrega ejecución única de color: ACK true, seis huellas legadas/
+UUID invariantes, metadatos verificados y maintenance=true, sin otras
+migraciones. **Cerrado el subgate de base de color.** Reviewer leyó el switch
+RoutineColorApplied del wrapper: default sigue exigiendo ausencia, switch
+exige columna presente NOT NULL/default copper exacto y check validado, resto
+de precondiciones/revalidación bajo lock intactos. AST PASS e Inspect real:
+default opening_ready=false, switch true, ambos mantenimiento cerrado/inflight
+cero. No necesidad de suites generales para esta delta.
+
+**Aprobada reapertura Open -Authorized -RoutineColorApplied, condicionada al
+artefacto publicado color TRUE verificado e Inspect actual satisfactorio.**
+Cambiar variable Vercel no equivale a verificar ese artefacto ni habilita
+reapertura anticipada. La publicación sigue el commit/GitHub autorizado.
+
+Aceptación mínima de color sin alterar otros campos: administrador AAL2 cambia
+una rutina por UI de copper a sage y vuelve al original, ACK/readback de ambos;
+empleado AAL1 ve el color sin editor y prueba PATCH del color ACTUAL de una
+rutina asignada con return=representation: denegación 401/403 o 200 array vacío,
+nunca filas devueltas. Usar valor actual evita cambio de negocio incluso si el
+negativo revela un permiso indebido; ese resultado sería fallo, no éxito.
+Después conciliar seis huellas legadas/UUID y colores originales/restaurados,
+inflight cero. Ante error, cerrar maintenance y conciliar/restaurar explícitamente
+el color sin retry ciego. No mutaciones de otros campos, nueva migración,
+backup repetido o Etapa 5. La aceptación UI/artefacto final aún está pendiente.
+
+## Adaptador mínimo de aceptación color empleado — 20 de octubre
+
+**Aprobado Scope=EmployeeColor de auth-production-smoke**, condicionado a
+publicación color TRUE/apertura ya revisadas. Reviewer leyó la delta: sólo
+credencial empleado, UUID y URI exactos, GET de una rutina asignada con id/color
+esperado, PATCH con una única propiedad color igual al valor actual y header
+return=representation. Sólo 401/403 o 200 array vacío acreditan denegación;
+cualquier fila devuelta es fallo de RLS aunque su valor no cambie. Logout
+limitado a la sesión propia. Doce casos del guard nuevo/parser y 28 del helper
+afectado entregados PASS, sin HTTP; no se repiten suites.
+
+El operador conserva el color sage estable durante GET/PATCH de esta prueba,
+sin otra edición concurrente, y luego restaura copper por UI administrativa
+con readback. El negativo usa valor actual para evitar cambio de color ante
+defecto de política; no se presenta como garantía bajo cambios concurrentes.
+La evidencia resultante será lectura/denegación API real de empleado, no prueba
+automática de su navegador/UI. El flujo administrativo sí requiere UI real y
+restauración explícita de su valor original. No ejecución real atribuida aún.

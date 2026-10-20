@@ -196,6 +196,51 @@ SELECT json_build_object('actor',current_user,'database',current_database(),
   }finally{await session.close();}
 }
 
+// Independent, explicitly authorized routine-color delivery AFTER Auth acceptance.
+// Pinned original SQL only; never discovers or applies other pending migrations.
+export const approvedRoutineColorSha256='243940a950e51280b6a892df39f2ccbea67e9bbbfe04de27b338a0d963462b60';
+export function inspectRoutineColor(){
+  const bytes=readFileSync(join(here,'..','supabase','migrations','20261016000000_add_rutinas_color.sql'));
+  if(sha(bytes)!==approvedRoutineColorSha256)throw Error('routine_color_source_changed');
+  return {bytes,sha256:approvedRoutineColorSha256};
+}
+export function acceptRoutineColorPrestate(p){
+  return p?.maintenance===true&&p.in_flight===0&&p.color_absent===true&&p.pin_absent===true&&p.forced_rls_tables===6;
+}
+export async function runApprovedRoutineColor({authorized=false,authAccepted=false,expectedSha256}={}){
+  if(authorized!==true||authAccepted!==true||expectedSha256!==approvedRoutineColorSha256)throw Error('routine_color_explicit_approval_required');
+  const plan=inspectRoutineColor();
+  requireLocalWindows();
+  const session=new TlsSession(randomBytes(16).toString('hex'),'holder');
+  const integritySql=readFileSync(join(here,'..','supabase','inspections','stage04-cutover-integrity.sql'));
+  const stateSql=`BEGIN TRANSACTION READ ONLY;
+SELECT json_build_object('maintenance',(SELECT maintenance FROM private.security_operations WHERE singleton),
+'in_flight',(SELECT count(*) FROM private.admin_operation_admissions WHERE finished_at IS NULL),
+'color_absent',NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.rutinas'::regclass AND attname='color' AND NOT attisdropped),
+'pin_absent',NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.empleados'::regclass AND attname='pin' AND NOT attisdropped),
+'forced_rls_tables',(SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN ('empleados','rutinas','tareas_rutina','empleado_rutinas','auditoria_diaria','tareas_urgentes') AND c.relrowsecurity AND c.relforcerowsecurity));ROLLBACK;`;
+  try{
+    const state=JSON.parse(await session.query(stateSql));
+    if(!acceptRoutineColorPrestate(state))throw Error('routine_color_prestate_rejected');
+    const before=JSON.parse(await session.query(integritySql));
+    if(before.actor!=='postgres'||before.database!=='postgres'||before.color_present!==false||before.unexpected_active_writers!==0||before.unexpected_open_transactions!==0)throw Error('routine_color_source_busy');
+    // Bound DDL waits without changing the pinned original migration.
+    await session.query("SET lock_timeout='5s';SET statement_timeout='30s';");
+    // No retry on missing ACK. Maintenance stays closed for reconciliation.
+    await session.query(plan.bytes);
+    const after=JSON.parse(await session.query(integritySql));
+    if(after.color_present!==true||JSON.stringify(before.business)!==JSON.stringify(after.business))throw Error('routine_color_post_integrity_rejected');
+    const proof=JSON.parse(await session.query(`BEGIN TRANSACTION READ ONLY;
+SELECT json_build_object('all_default',(SELECT count(*)=count(*) FILTER(WHERE color='copper') FROM public.rutinas),
+'not_null',(SELECT attnotnull FROM pg_attribute WHERE attrelid='public.rutinas'::regclass AND attname='color' AND NOT attisdropped),
+'palette_constraint',EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.rutinas'::regclass AND conname='rutinas_color_palette_check' AND contype='c' AND convalidated));ROLLBACK;`));
+    if(proof.all_default!==true||proof.not_null!==true||proof.palette_constraint!==true)throw Error('routine_color_metadata_rejected');
+    const closed=JSON.parse(await session.query(stateSql));
+    if(closed.maintenance!==true||closed.in_flight!==0||closed.color_absent!==false||closed.pin_absent!==true||closed.forced_rls_tables!==6)throw Error('routine_color_containment_rejected');
+    return {migration:'20261016000000_add_rutinas_color.sql',sha256:plan.sha256,commitAcknowledged:true,legacyIntegrityUnchanged:true,metadataVerified:true,maintenance:true,otherMigrationsApplied:false};
+  }finally{await session.close();}
+}
+
 // Call only after human authorization and reviewed source/control-plane gates.
 // This factory prepares execution; .run() is the ONLY migration entry point.
 export async function prepareCutoverRuntime({expandPath,expectedExpandSha256=approvedExpandSha256,attestations,

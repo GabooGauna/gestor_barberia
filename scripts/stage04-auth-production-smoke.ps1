@@ -2,7 +2,9 @@
 # Explicit real Auth acceptance. Credentials/tokens stay in RAM. Revokes ONLY
 # the session created here, not other operator sessions. No employee/data writes.
 param([ValidateSet('Admin','Employee')][string] $CredentialKind='Admin',
- [ValidateSet('Auth','SecurityClosed')][string]$Scope='Auth')
+ [ValidateSet('Auth','SecurityClosed','EmployeeRead','EmployeeColor')][string]$Scope='Auth',
+ [string]$ExpectedReadProofPath,[string]$ColorRoutineId,
+ [ValidateSet('copper','sage','steel','plum')][string]$ExpectedRoutineColor='copper')
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $extra=Get-Variable args -Scope Local -ErrorAction SilentlyContinue
@@ -17,15 +19,26 @@ foreach($name in @('Assert-NoReparsePath','Assert-PrivateAcl','Assert-LocalOnlyD
 function Invoke-SmokeHttp {
  param([string]$Method,[string]$Uri,[string]$Bearer,[string]$ApiKey,[string]$Body)
  $authTarget=$Uri -cmatch '^https://(?:api\.supabase\.com/v1/projects/ucmwykzrepmjucssjnum(?:/api-keys\?reveal=true)?|ucmwykzrepmjucssjnum\.supabase\.co/auth/v1/(?:token\?grant_type=(?:password|refresh_token)|user|logout\?scope=local))$'
+ $readProofTarget=$Scope -ceq 'EmployeeRead' -and $Method -ceq 'GET' -and $Uri -cmatch '^https://ucmwykzrepmjucssjnum\.supabase\.co/rest/v1/(?:empleados|rutinas|tareas_rutina|empleado_rutinas|auditoria_diaria|tareas_urgentes)\?select=id&order=id\.asc$'
+ $foreignProfileTarget=$Scope -ceq 'EmployeeRead' -and $Method -ceq 'GET' -and $Uri -ceq 'https://ucmwykzrepmjucssjnum.supabase.co/rest/v1/empleados?select=id&id=eq.929b1530-6889-4a06-a275-70ef0ba347cf'
+ $colorTarget=$false
+ if($Scope -ceq 'EmployeeColor' -and $CredentialKind -ceq 'Employee' -and $ColorRoutineId -cmatch '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'){
+  $colorTarget=$Uri -ceq ('https://ucmwykzrepmjucssjnum.supabase.co/rest/v1/rutinas?select=id,color&id=eq.'+$ColorRoutineId) -and $Method -cin @('GET','PATCH')
+  if($colorTarget -and $Method -ceq 'PATCH'){
+   $patch=$Body|ConvertFrom-Json
+   if(@($patch.PSObject.Properties).Count -ne 1 -or $patch.color -cne $ExpectedRoutineColor){throw 'Color negative probe payload rejected.'}
+  }
+ }
  $restTarget=$Method -ceq 'GET' -and $Uri -cmatch '^https://ucmwykzrepmjucssjnum\.supabase\.co/rest/v1/(?:empleados|rutinas|tareas_rutina|empleado_rutinas|auditoria_diaria|tareas_urgentes)\?select=id&limit=1$'
  $edgeTarget=$Method -ceq 'POST' -and $Uri -ceq 'https://ucmwykzrepmjucssjnum.supabase.co/functions/v1/admin-users'
- if($Method -cnotin @('GET','POST') -or -not($authTarget -or $restTarget -or $edgeTarget)){throw 'Smoke HTTP target rejected.'}
+ if(($Method -cnotin @('GET','POST') -and -not $colorTarget) -or -not($authTarget -or $restTarget -or $edgeTarget -or $readProofTarget -or $foreignProfileTarget -or $colorTarget)){throw 'Smoke HTTP target rejected.'}
  $handler=[Net.Http.HttpClientHandler]::new();$handler.AllowAutoRedirect=$false;$handler.UseCookies=$false
  $client=[Net.Http.HttpClient]::new($handler);$client.Timeout=[TimeSpan]::FromSeconds(20)
  $request=[Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::new($Method),$Uri);$response=$null
  try{
   $request.Headers.Authorization=[Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer',$Bearer)
   if($ApiKey){$request.Headers.Add('apikey',$ApiKey)}
+  if($colorTarget -and $Method -ceq 'PATCH'){$request.Headers.Add('Prefer','return=representation')}
   if($Body){$request.Content=[Net.Http.StringContent]::new($Body,[Text.Encoding]::UTF8,'application/json')}
   $response=$client.SendAsync($request).GetAwaiter().GetResult()
   $text=$response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
@@ -69,6 +82,49 @@ try{
  $user=Invoke-SmokeHttp GET ($base+'user') $access $anon
  if($user.Status -ne 200 -or $user.Json.id -cne $identity){throw 'Authenticated identity mismatch.'}
  $user=$null
+ if($Scope -ceq 'EmployeeColor'){
+  $phase='employee_color_read_and_denied_patch'
+  if($CredentialKind -cne 'Employee'){throw 'Employee color scope requires employee.'}
+  $uri='https://ucmwykzrepmjucssjnum.supabase.co/rest/v1/rutinas?select=id,color&id=eq.'+$ColorRoutineId
+  $read=Invoke-SmokeHttp GET $uri $access $anon
+  if($read.Status -ne 200 -or -not $read.JsonIsArray -or $read.Json.Count -ne 1 -or $read.Json[0].id -cne $ColorRoutineId -or $read.Json[0].color -cne $ExpectedRoutineColor){throw 'Assigned routine color read failed.'}
+  # Same current color only: a policy defect cannot alter the routine's value.
+  $denied=Invoke-SmokeHttp PATCH $uri $access $anon (@{color=$ExpectedRoutineColor}|ConvertTo-Json -Compress)
+  $rejected=$denied.Status -in @(401,403) -or ($denied.Status -eq 200 -and $denied.JsonIsArray -and $denied.Json.Count -eq 0)
+  if(-not $rejected){throw 'Employee color update unexpectedly allowed.'}
+  $logout=Invoke-SmokeHttp POST ($base+'logout?scope=local') $access $anon
+  if($logout.Status -notin @(200,204)){throw 'Employee color session logout failed.'}
+  $sessionClosed=$true
+  @{Scope=$Scope;AssignedColorReadVerified=$true;ExpectedColor=$ExpectedRoutineColor;ColorEditDenied=$true;PatchStatus=$denied.Status;CurrentValueOnlyNegativeProbe=$true;LocalSessionLogoutVerified=$true;SecretsPrinted=$false}|ConvertTo-Json -Compress
+  return
+ }
+ if($Scope -ceq 'EmployeeRead'){
+  $phase='employee_read_proof'
+  if($CredentialKind -cne 'Employee' -or -not $ExpectedReadProofPath){throw 'Employee read scope requires expected proof.'}
+  $proof=Get-Content -LiteralPath $ExpectedReadProofPath -Raw | ConvertFrom-Json
+  $tables=@('empleados','rutinas','tareas_rutina','empleado_rutinas','auditoria_diaria','tareas_urgentes')
+  if(@($proof.employee).Count -ne 6){throw 'Expected proof cardinality rejected.'}
+  $results=@()
+  foreach($table in $tables){
+   $expected=@($proof.employee | Where-Object {$_.resource -ceq $table})
+   if($expected.Count -ne 1 -or ($expected[0].count -isnot [long] -and $expected[0].count -isnot [int]) -or $expected[0].count -lt 0 -or $expected[0].uuid_sha256 -cnotmatch '^[a-f0-9]{64}$'){throw 'Expected proof rejected.'}
+   $r=Invoke-SmokeHttp GET ('https://ucmwykzrepmjucssjnum.supabase.co/rest/v1/'+$table+'?select=id&order=id.asc') $access $anon
+   if($r.Status -ne 200 -or -not $r.JsonIsArray){throw 'Employee REST read rejected.'}
+   $ids=@($r.Json | ForEach-Object {[Guid]::ParseExact($_.id,'D').ToString('D')} | Sort-Object -CaseSensitive)
+   $bytes=[Text.Encoding]::UTF8.GetBytes(($ids -join "`n"))
+   $digest=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+   if($ids.Count -ne [int]$expected[0].count -or $digest -cne $expected[0].uuid_sha256){throw 'Employee RLS set mismatch.'}
+   $results+=@{resource=$table;count=$ids.Count;uuidSetVerified=$true}
+  }
+  $foreign=Invoke-SmokeHttp GET 'https://ucmwykzrepmjucssjnum.supabase.co/rest/v1/empleados?select=id&id=eq.929b1530-6889-4a06-a275-70ef0ba347cf' $access $anon
+  if($foreign.Status -ne 200 -or -not $foreign.JsonIsArray -or $foreign.Json.Count -ne 0){throw 'Foreign profile exposed.'}
+  $phase='employee_read_session_logout'
+  $logout=Invoke-SmokeHttp POST ($base+'logout?scope=local') $access $anon
+  if($logout.Status -notin @(200,204)){throw 'Employee session logout failed.'}
+  $sessionClosed=$true
+  @{Scope=$Scope;SixTableUuidSetsVerified=$true;ForeignAdminProfileDenied=$true;Results=$results;BusinessMutationExecuted=$false;LocalSessionLogoutVerified=$true;SecretsPrinted=$false} | ConvertTo-Json -Depth 5 -Compress
+  return
+ }
  if($Scope -ceq 'SecurityClosed'){
   $phase='anonymous_and_maintenance_rls'
   $tables=@('empleados','rutinas','tareas_rutina','empleado_rutinas','auditoria_diaria','tareas_urgentes')

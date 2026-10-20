@@ -176,3 +176,59 @@ accesibles; no se afirma restauración exacta del factor ni se reactiva PIN/anon
 Pendientes: publicación Auth y aceptación final con AAL2/negocio, apertura
 controlada y después color separado. Integración GitHub–Vercel existente
 confirmada y commits/push autorizados. Sin Etapa 5 ni declaración de producción lista.
+
+## Publicación Auth — 20 de octubre de 2026
+
+- Commit `c03511e`, push normal autorizado a `main`; Vercel status `success`,
+  deployment `4zkLmVx3AELLaohWbzYkkubC9Dm2` del proyecto existente.
+- Dominio de producción HTTP 200, asset `/assets/index-n4vvqqeR.js`: cliente Auth,
+  clave manual MFA, referencia Supabase correcta y bandera compilada de colores
+  `false` comprobados. No se crearon proyectos ni configuraciones duplicadas.
+- El propietario confirmó MFA configurado; consulta de metadatos previa:
+  un factor TOTP administrativo verificado, una sesión AAL2, mantenimiento activo
+  e in-flight cero. No se inspeccionaron semillas ni tokens.
+- Pendiente login del propietario con MFA en el dominio definitivo y aceptación
+  real de Edge/mantenimiento y datos por rol antes de habilitar el servicio.
+- `rutinas.color` sigue sin aplicar y su bandera OFF. No se repitieron pruebas
+  locales aprobadas ni respaldos/restauraciones.
+
+### Aceptación del cliente y mantenimiento con MFA
+
+Propietario confirmó login con contraseña y TOTP en Vercel: navegación de
+administrador visible y paneles vacíos por mantenimiento. En sesión controlada
+del mismo dominio se verificaron Auth GET user 200 y perfil activo admin, las
+seis tablas REST sin filas y Edge `admin-users` con solicitud dummy a UUID
+inexistente: HTTP 503 / `maintenance_active`. Esto demuestra paso de MFA y rol
+antes del bloqueo de admisión; no hubo mutación de negocio. `/panel` responde
+200 con el mismo artefacto Auth y no muestra el QR tras verificar.
+
+Lectura de metadatos: un factor TOTP verificado, dos sesiones AAL2, mantenimiento
+true e in-flight cero. Pendientes únicamente apertura controlada, comparación
+de conjuntos UUID por rol y, después, entrega independiente de colores.
+
+## Auth aceptado y color aplicado por separado
+
+Open explícito devolvió ACK y lectura fresca maintenance=false/in-flight0.
+Admin AAL2: seis conjuntos UUID exactos (45 auditorías, 3 asignaciones,
+2 perfiles, 5 rutinas, 53 tareas, 4 urgencias). Empleado AAL1: conjuntos propios
+exactos (45/3/1/3/36/4 por esos mismos recursos), filtro al perfil administrativo
+vacío y logout sólo de su sesión de prueba. La referencia independiente se
+obtuvo por SQL de sólo lectura, sin evaluar RLS ni claims para calcularla.
+Edge AAL2 admitió solicitud dummy y rechazó destino inexistente 404; ninguna
+mutación Auth ni negocio, admisión terminada. Reviewer aceptó Auth/RLS/Edge.
+
+Luego Close explícito ACK/freshtrue/in-flight0. Se ejecutó sólo la migración
+`20261016000000_add_rutinas_color.sql`, SHA256
+`243940a950e51280b6a892df39f2ccbea67e9bbbfe04de27b338a0d963462b60`.
+ACK positivo, seis hashes UUID/legacy invariantes, columna NOT NULL, paleta
+validada y todas las rutinas copper. No db push ni otras migraciones.
+
+Adaptador de reapertura: default sigue exigiendo columna ausente;
+`-RoutineColorApplied` exige columna NOT NULL/default copper/constraint validado
+sin cambiar las demás precondiciones. AST y dos Inspect reales PASS: fase
+precolor rechaza, fase postcolor acepta; mantenimiento true/in-flight0.
+Reviewer aprobó este guard y EmployeeColor condicionado a artefacto TRUE.
+Nuevo transporte EmployeeRead: 28 guardas + parser/hash vacío PASS;
+EmployeeColor: 12 guardas + parser PASS. No suites/backup/restore repetidos.
+Pendiente confirmación del propietario de la variable Production true antes
+del push que publicará colores y de las verificaciones finales de esa capacidad.

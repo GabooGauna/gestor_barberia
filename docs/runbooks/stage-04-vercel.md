@@ -103,16 +103,17 @@ promover un despliegue anterior que use PIN ni desactivar RLS para recuperarlo.
 Color puede volver a OFF mediante otro build sin eliminar la columna/datos.
 No confundir mantenimiento visual de Vercel con contención REST/Auth/Edge.
 
-## Evidencia pendiente
+## Evidencia actual y pendiente
 
-Proyecto/equipo Vercel, origen/dominio real, variables del ambiente y despliegue
-real aún no verificados. Persisten gates de Supabase del informe de recuperación.
-La lectura adicional de privilegios descartó dar por disponible un bloqueo
-SHARE de todas las tablas Auth/Storage usando `postgres`. Antes de modificar
-producción, obtener del proveedor/operador autorizado un procedimiento soportado
-para suspender esos escritores manteniendo accesible el respaldo y ensayarlo.
-La consulta y sus límites figuran en `../reviews/stage-04-vercel-preparation.md`.
-No migraciones, push, deploy ni Etapa 5 en esta preparación.
+Integración GitHub–Vercel existente y publicación Auth `c03511e` verificadas;
+dominio y `/panel` 200, artefacto Auth correcto y color inicialmente OFF.
+Auth/RLS/Edge y MFA reales aceptados por Reviewer. La migración color ya se
+aplicó por separado con integridad intacta; mantenimiento activo mientras se
+confirma la variable Production true y se publica/verifica el artefacto color.
+No solicitar mecanismo imposible de suspensión interna ni repetir respaldos:
+rige el alcance residual expresamente aceptado en la decisión de corte.
+No hay Etapa 5. Evidencia detallada en
+`../reviews/stage-04-controlled-cutover-checkpoint.md`.
 
 Fuentes oficiales: [Vite/SPA](https://vercel.com/docs/frameworks/frontend/vite),
 [variables](https://vercel.com/docs/environment-variables),
