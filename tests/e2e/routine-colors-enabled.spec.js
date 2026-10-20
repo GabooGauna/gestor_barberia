@@ -45,7 +45,7 @@ test("crea y edita colores semánticos cuando la capacidad está habilitada", as
   supabaseMock.allowMutationsFor("rutinas");
 
   await page.goto("/panel");
-  await expect(page.getByText("Cargando rutinas…")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Apertura del estudio", exact: true })).toBeVisible();
 
   const initialRoutineRequest = supabaseMock.requests.find(
     ({ method, table }) => method === "GET" && table === "rutinas",

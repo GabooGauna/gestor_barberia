@@ -29,6 +29,16 @@ async function freezeAt(page, time) {
   await page.clock.pauseAt(new Date(time));
 }
 
+async function settleFrozenPanel(page) {
+  // Suspense needs timer turns to commit downloaded chunks. Advance at most
+  // one second, leaving nine seconds before the midnight under test.
+  let steps = 0;
+  await expect.poll(async () => {
+    if (steps++ < 10) await page.clock.runFor(100);
+    return page.getByRole("heading", { name: "Mis Protocolos Asignados" }).isVisible();
+  }).toBe(true);
+}
+
 function businessReads(mock, table) {
   return mock.requests.filter((request) => request.table === table && request.method === "GET");
 }
@@ -192,6 +202,7 @@ test("medianoche argentina renueva tareas con pestaña abierta y conserva histor
   const history = structuredClone(supabaseMock.tables.get("auditoria_diaria"));
   await seedAuthSession(page, supabaseMock, employee);
   await page.goto("/panel");
+  await settleFrozenPanel(page);
   const dailyTask = page.getByRole("button", { name: /Desinfectar herramientas/ });
   await expect(dailyTask).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: /Indicación del lunes/ })).toHaveAttribute("aria-pressed", "true");
@@ -205,6 +216,7 @@ test("medianoche argentina renueva tareas con pestaña abierta y conserva histor
   await expect.poll(() => businessReads(supabaseMock, "auditoria_diaria").some(({ url }) => new URL(url).searchParams.get("fecha") === "eq.2026-10-20")).toBe(true);
 
   await page.reload();
+  await settleFrozenPanel(page);
   await expect(dailyTask).toHaveCount(0);
   await expect(page.getByText("Indicación del lunes")).toHaveCount(0);
   expect(supabaseMock.tables.get("auditoria_diaria")).toEqual(history);
@@ -218,6 +230,7 @@ test("medianoche UTC mantiene el mismo cumplimiento del día argentino", async (
   seedWork(supabaseMock);
   await seedAuthSession(page, supabaseMock, employee);
   await page.goto("/panel");
+  await settleFrozenPanel(page);
   const dailyTask = page.getByRole("button", { name: /Desinfectar herramientas/ });
   await expect(dailyTask).toHaveAttribute("aria-pressed", "true");
   const previousReads = businessReads(supabaseMock, "auditoria_diaria").length;
@@ -233,6 +246,7 @@ for (const event of ["focus", "visibilitychange"]) {
     seedWork(supabaseMock);
     await seedAuthSession(page, supabaseMock, employee);
     await page.goto("/panel");
+    await settleFrozenPanel(page);
     await expect(page.getByRole("button", { name: /Desinfectar herramientas/ })).toHaveAttribute("aria-pressed", "true");
     await page.clock.setSystemTime(new Date("2026-10-20T03:00:01Z"));
     await page.evaluate((name) => (name === "focus" ? window : document).dispatchEvent(new Event(name)), event);

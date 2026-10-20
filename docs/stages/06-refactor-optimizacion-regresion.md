@@ -8,6 +8,25 @@ Consolidar arquitectura, reducir deuda y demostrar estabilidad sin funcionalidad
 
 Etapas 1–5 aprobadas, suite E2E estable y métricas base disponibles.
 
+### Apertura autorizada — 20 de octubre de 2026
+
+El propietario solicita expresamente iniciar Etapa 6 sobre los flujos de Etapa 5
+ya desplegados y aceptados. Orquestador acepta este alcance: el roadmap general
+de filtros avanzados/actividad incremental de Etapa 5 permanece diferido, sin
+declararlo implementado. Producto congelado; diseño GNS, temas, Auth/RLS y
+contratos existentes se conservan. No se repiten auditorías históricas.
+
+Autoriza optimizaciones medibles, regresión local aislada, limpieza real puntual
+en el proyecto Supabase existente, commit/push y comprobación de Vercel. La
+limpieza incluye exclusivamente pruebas identificadas y César con su identidad
+Auth/relaciones; requiere inventario, respaldo puntual verificado y control de
+integridad. Conserva ambos administradores/contraseñas/MFA, demás usuarios,
+plantillas/tareas/colores, permisos y configuración. Registros ambiguos quedan
+fuera. Sin migraciones, cambios de autenticación/RLS ni funcionalidades nuevas.
+
+Handoffs y evidencia de cierre en `docs/reviews/stage-06-delivery.md` y revisión
+independiente en `docs/reviews/stage-06-review.md`.
+
 ## Alcance
 
 - Separar datos, sesión, dominio y presentación donde aporte claridad.

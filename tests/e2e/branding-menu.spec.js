@@ -29,7 +29,7 @@ test("integra la marca GNS y el título del navegador", async ({
   await expect(loginLogo).toBeVisible();
   await expect(loginLogo).toHaveAttribute(
     "src",
-    /gns-hairstudio-logo\.png/,
+    /gns-hairstudio-logo\.webp/,
   );
 
   const dimensions = await loginLogo.evaluate((image) => ({

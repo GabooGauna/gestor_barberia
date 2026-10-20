@@ -1,9 +1,11 @@
 // src/pages/Panel.jsx
-import PanelAdmin from "../components/PanelAdmin";
-import PanelEmpleado from "../components/PanelEmpleado";
+import { lazy, Suspense } from "react";
 import BrandLogo from "../components/BrandLogo";
 import UserActionsMenu from "../components/UserActionsMenu";
 import { useAuth } from "../hooks/useAuth";
+
+const PanelAdmin = lazy(() => import("../components/PanelAdmin"));
+const PanelEmpleado = lazy(() => import("../components/PanelEmpleado"));
 
 export default function Panel() {
   const { profile: usuario, signOut } = useAuth();
@@ -32,7 +34,13 @@ export default function Panel() {
 
         {/* Renderizado condicional: Si el rol es admin, muestra PanelAdmin. Si no, PanelEmpleado */}
         <main className="workspace-main">
-          {usuario?.rol === "admin" ? <PanelAdmin /> : <PanelEmpleado usuario={usuario} />}
+          <Suspense fallback={
+            <div className="loading-state" role="status">
+              <span className="loading-dot" aria-hidden="true" />Cargando panel…
+            </div>
+          }>
+            {usuario?.rol === "admin" ? <PanelAdmin /> : <PanelEmpleado usuario={usuario} />}
+          </Suspense>
         </main>
       </div>
     </div>

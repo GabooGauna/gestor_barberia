@@ -1,7 +1,6 @@
 // src/components/PanelAdmin.jsx
-import { useState, useEffect, useRef } from "react";
+import { lazy, Suspense, useCallback, useState, useEffect, useRef } from "react";
 import { supabase } from "../services/supabase";
-import CalendarioAuditoria from "./CalendarioAuditoria";
 import RegistroEmpleados from "./RegistroEmpleados"; // <-- Importamos nuestro componente modular
 import AsignarRutinas from "./AsignarRutinas";
 import EnviarTareaUrgente from "./EnviarTareaUrgente";
@@ -15,6 +14,8 @@ import {
   normalizeRoutineColor,
   routineColorClass,
 } from "../utils/coloresRutina";
+
+const CalendarioAuditoria = lazy(() => import("./CalendarioAuditoria"));
 
 function RoutineColorPicker({ name, value, onChange, disabled = false }) {
   return (
@@ -144,7 +145,7 @@ export default function PanelAdmin() {
     }
   };
 
-  const cargarEmpleados = async () => {
+  const cargarEmpleados = useCallback(async () => {
     try {
       setCargandoEmpleados(true);
       const { data, error } = await supabase
@@ -160,14 +161,17 @@ export default function PanelAdmin() {
     } finally {
       setCargandoEmpleados(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     queueMicrotask(() => {
       cargarRutinas();
-      cargarEmpleados();
     });
   }, []);
+
+  useEffect(() => {
+    if (vistaActiva === "empleados") queueMicrotask(cargarEmpleados);
+  }, [vistaActiva, cargarEmpleados]);
 
   useEffect(() => {
     if (!empleadoReset) return undefined;
@@ -726,7 +730,15 @@ export default function PanelAdmin() {
       {vistaActiva === "asignar" && <AsignarRutinas />}
 
       {/* VISTA 4: Calendario y Auditoría */}
-      {vistaActiva === "auditoria" && <CalendarioAuditoria onAssign={() => setVistaActiva("asignar")} />}
+      {vistaActiva === "auditoria" && (
+        <Suspense fallback={
+          <div className="loading-state" role="status">
+            <span className="loading-dot" aria-hidden="true" />Cargando auditoría…
+          </div>
+        }>
+          <CalendarioAuditoria onAssign={() => setVistaActiva("asignar")} />
+        </Suspense>
+      )}
 
       {/* VISTA DE TAREAS URGENTES */}
       {vistaActiva === "urgentes" && (

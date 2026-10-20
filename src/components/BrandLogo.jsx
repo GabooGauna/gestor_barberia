@@ -1,4 +1,4 @@
-import logoGns from "../assets/branding/gns-hairstudio-logo.png";
+import logoGns from "../assets/branding/gns-hairstudio-logo.webp";
 
 export default function BrandLogo({ className = "" }) {
   return (
@@ -6,6 +6,8 @@ export default function BrandLogo({ className = "" }) {
       className={`brand-logo ${className}`.trim()}
       src={logoGns}
       alt="GNS Hair Studio"
+      width="720"
+      height="540"
     />
   );
 }

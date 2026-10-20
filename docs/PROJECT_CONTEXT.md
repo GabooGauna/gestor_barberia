@@ -1,6 +1,24 @@
 # Contexto técnico — Gestor de Barbería
 
-## Estado del relevamiento
+## Etapa 6 vigente — 20 de octubre de 2026
+
+El propietario abrió expresamente Etapa 6 sobre los flujos aprobados de Etapa 5,
+con optimización, regresión, limpieza real puntual de pruebas/César y publicación
+GitHub–Vercel. No incorpora filtros avanzados pendientes ni cambia Auth/RLS.
+Panel/roles/Auditoría usan carga diferida; Equipo consulta al entrar. JS inicial
+538,10→488,29 kB y logo servido 964,66→176,13 kB; PNG maestro conservado, assets
+del template retirados tras verificar no uso. Diseño/CSS GNS y temas intactos.
+El respaldo puntual DPAPI de César está verificado fuera de Git/OneDrive y el
+SQL selectivo pasó seis controles sintéticos. Limpieza remota con COMMIT y hard
+delete Auth reconocidos: calendario/asignaciones vacíos, cinco rutinas/53 tareas,
+colores y ambos administradores preservados; cero referencias huérfanas.
+Evidencia y estado de limpieza,
+regresión y publicación: `docs/reviews/stage-06-delivery.md`.
+
+Los apartados siguientes son cronología del relevamiento y etapas anteriores;
+sus bloqueos ya resueltos no vuelven a abrirse por este trabajo.
+
+## Estado del relevamiento histórico
 
 - Fecha de corte: 15 de octubre de 2026.
 - Repositorio: SPA construida con React y Vite.
