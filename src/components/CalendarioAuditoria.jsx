@@ -31,7 +31,7 @@ function displayDate(date) {
   return date.split("-").reverse().join("/");
 }
 
-function groupRecords(audits, urgentTasks, assignments) {
+function groupRecords(audits, urgentTasks, assignments, auditsAvailable = true) {
   const employees = new Map();
   const add = (record, task) => {
     if (!employees.has(record.empleado_id)) {
@@ -60,9 +60,9 @@ function groupRecords(audits, urgentTasks, assignments) {
         description: task?.descripcion || "Tarea sin descripción disponible",
         routine: routine?.titulo || "Rutina asignada",
         section: task?.seccion,
-        status: cancelled ? (completed ? "Asignación cancelada · Completado" : "Asignación cancelada") : completed ? "Completado ✓" : "Pendiente ⏳",
+        status: cancelled ? (completed ? "Asignación cancelada · Completado" : "Asignación cancelada") : !auditsAvailable ? "Estado sin verificar" : completed ? "Completado ✓" : "Pendiente ⏳",
         completed: completed && !cancelled,
-        inactive: cancelled,
+        inactive: cancelled, counted: auditsAvailable,
       });
     });
     if (ids.length === 0) add(assignment, {
@@ -96,7 +96,7 @@ function groupRecords(audits, urgentTasks, assignments) {
   return [...employees.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 }
 
-export default function CalendarioAuditoria() {
+export default function CalendarioAuditoria({ onAssign }) {
   const today = useBusinessDate();
   // null follows Argentina's current day; an explicit selection stays historical.
   const [selectedDate, setSelectedDate] = useState(null);
@@ -117,12 +117,14 @@ export default function CalendarioAuditoria() {
       try {
         const first = `${month}-01`;
         const next = `${shiftMonth(month, 1)}-01`;
-        const [audits, urgentTasks, assignments] = await Promise.all([
+        const results = await Promise.allSettled([
           readPages(() => supabase.from("auditoria_diaria").select("id,fecha").gte("fecha", first).lt("fecha", next), controller.signal),
           readPages(() => supabase.from("tareas_urgentes").select("id,fecha").gte("fecha", first).lt("fecha", next), controller.signal),
           readPages(() => supabase.from("asignaciones_diarias").select("id,fecha").gte("fecha", first).lt("fecha", next), controller.signal),
         ]);
-        if (!controller.signal.aborted) setMonthResult({ month, dates: [...new Set([...audits, ...urgentTasks, ...assignments].map((r) => r.fecha))], loading: false, error: false });
+        const failed = results.filter((result) => result.status === "rejected").length;
+        const rows = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+        if (!controller.signal.aborted) setMonthResult({ month, dates: [...new Set(rows.map((r) => r.fecha))], loading: false, error: failed === results.length, partial: failed > 0 && failed < results.length });
       } catch {
         if (!controller.signal.aborted) setMonthResult({ month, dates: [], loading: false, error: true });
       }
@@ -135,7 +137,7 @@ export default function CalendarioAuditoria() {
     const controller = new AbortController();
     async function load() {
       try {
-        const [audits, urgentTasks, assignments] = await Promise.all([
+        const results = await Promise.allSettled([
           readPages(() => supabase.from("auditoria_diaria")
             .select("id,tarea_id,empleado_id,anulada_en,empleados(id,nombre,rol),tareas_rutina(id,seccion,descripcion,rutinas(id,titulo))")
             .eq("fecha", date), controller.signal),
@@ -146,7 +148,9 @@ export default function CalendarioAuditoria() {
             .select("id,empleado_id,rutina_id,fecha,cancelada_en,tarea_ids,empleados(id,nombre),rutinas(id,titulo,tareas_rutina(id,seccion,descripcion,orden))")
             .eq("fecha", date), controller.signal),
         ]);
-        if (!controller.signal.aborted) setDayResult({ date, employees: groupRecords(audits, urgentTasks, assignments), loading: false, error: false });
+        const failed = results.filter((result) => result.status === "rejected").length;
+        const [audits, urgentTasks, assignments] = results.map((result) => result.status === "fulfilled" ? result.value : []);
+        if (!controller.signal.aborted) setDayResult({ date, employees: groupRecords(audits, urgentTasks, assignments, results[0].status === "fulfilled"), loading: false, error: failed === results.length, partial: failed > 0 && failed < results.length });
       } catch {
         if (!controller.signal.aborted) setDayResult({ date, employees: [], loading: false, error: true });
       }
@@ -205,6 +209,7 @@ export default function CalendarioAuditoria() {
           <h2 className="text-xl font-bold">Calendario Operativo y Auditoría</h2>
           <p>Revisá las tareas y el cumplimiento registrados para cada día.</p>
         </div>
+        {date === today && onAssign && <button className="button button--primary" onClick={onAssign}>Asignar tareas de hoy</button>}
       </div>
 
       <div className="audit-workspace">
@@ -224,7 +229,7 @@ export default function CalendarioAuditoria() {
           {Array.from({ length: days }, (_, index) => {
             const day = `${month}-${String(index + 1).padStart(2, "0")}`;
             const hasAssignments = monthReady && !monthResult.error && monthResult.dates.includes(day);
-            const label = !monthReady || monthResult.error ? "asignaciones sin verificar" : hasAssignments ? "con asignaciones" : "sin asignaciones";
+            const label = !monthReady || monthResult.error ? "asignaciones sin verificar" : hasAssignments ? "con asignaciones" : monthResult.partial ? "asignaciones sin verificar" : "sin asignaciones";
             return (
               <button key={day} className="audit-calendar-day" data-date={day} aria-label={`${displayDate(day)}, ${label}`} aria-pressed={date === day} aria-current={day === today ? "date" : undefined} onClick={() => selectDate(day)}>
                 <span>{String(index + 1).padStart(2, "0")}</span>
@@ -235,6 +240,7 @@ export default function CalendarioAuditoria() {
         </div>
         <p className="audit-calendar-legend"><span className="audit-assignment-dot" aria-hidden="true" /> Tareas asignadas o cumplimiento registrado</p>
         {!monthReady && <p role="status">Cargando indicadores...</p>}
+        {monthReady && monthResult.partial && <p role="alert">Algunos indicadores no se pudieron cargar. Se muestran las fechas verificadas. <button className="button button--secondary" onClick={() => setReload((value) => value + 1)}>Reintentar</button></p>}
         {monthReady && monthResult.error && <p role="alert">No se pudieron cargar los indicadores. <button className="button button--secondary" onClick={() => setReload((value) => value + 1)}>Reintentar</button></p>}
       </section>
 
@@ -243,16 +249,17 @@ export default function CalendarioAuditoria() {
         <p className="audit-explanation">Las asignaciones y los estados corresponden únicamente a la fecha elegida.</p>
         {date !== today && <p className="audit-history-note">Consulta histórica · Los registros se conservan sin cambios.</p>}
         {actionSuccess?.date === date && <p className="audit-action-success" role="status">{actionSuccess.message}</p>}
+        {dayReady && dayResult.partial && <p role="alert">No se pudieron cargar todos los registros. Se muestran los disponibles. <button className="button button--secondary" onClick={() => setReload((value) => value + 1)}>Reintentar</button></p>}
         {!dayReady ? <p role="status">Cargando registros...</p> : dayResult.error ? (
           <p role="alert">No se pudieron cargar los registros. Revisá tu conexión y los permisos de acceso. <button className="button button--secondary" onClick={() => setReload((value) => value + 1)}>Reintentar</button></p>
-        ) : dayResult.employees.length === 0 ? <p className="audit-empty">No hay tareas asignadas ni cumplimiento registrado para esta fecha.</p> : dayResult.employees.map((employee) => {
+        ) : dayResult.employees.length === 0 ? <p className="audit-empty">{dayResult.partial ? "No hay registros disponibles en las fuentes que se pudieron consultar." : "No hay tareas asignadas ni cumplimiento registrado para esta fecha."}</p> : dayResult.employees.map((employee) => {
           const completed = employee.tasks.filter((task) => task.completed).length;
           const active = employee.tasks.filter((task) => !task.inactive && task.counted !== false).length;
           return (
             <article key={employee.id} className="audit-employee">
               <div className="audit-employee-summary">
                 <h3 className="text-lg font-bold">{employee.nombre}</h3>
-                <span>Realizadas: {completed} de {active}</span>
+                <span>{dayResult.partial ? "Resumen parcial · Revisá los estados disponibles" : `Realizadas: ${completed} de ${active}`}</span>
                 <button className="button button--secondary" aria-expanded={Boolean(expanded[employee.id])} onClick={() => setExpanded((previous) => ({ ...previous, [employee.id]: !previous[employee.id] }))}>
                   {expanded[employee.id] ? "Ocultar detalle de tareas ▲" : "Ver detalle de tareas ▼"}
                 </button>

@@ -1,5 +1,22 @@
 # Reinicio diario y calendario — 20 de octubre de 2026
 
+## Corrección de carga posterior al despliegue
+
+Se reprodujo `42501 permission denied for function business_today` con
+`SET LOCAL ROLE authenticated` y claims administrativos AAL2 en transacción de
+solo lectura. La RLS diaria usaba directamente un helper cuyo EXECUTE seguía
+revocado. Se aplicó únicamente el permiso a `authenticated`, sin acceso anónimo
+ni cambios en datos. Readback: 46 auditorías y sus 46 joins históricos accesibles,
+rutinas/tareas disponibles; empleado sin asignación hoy obtiene vacío sin error.
+RLS FORCE y bloqueo de escrituras directas conservados. SQL focal: 3 PASS.
+
+Frontend conserva resultados disponibles ante fallos parciales, evita falsos
+totales/estados y ofrece “Asignar tareas de hoy” sólo en la fecha actual.
+`npm run lint` y `npm run build`: PASS. Playwright `daily-audit.spec.js` y
+`panels.spec.js`, Chromium, 2 workers: 20/20 PASS. Los mocks no ejecutan RLS;
+las lecturas SQL reales y la regresión ACL cubren ese hueco de la validación
+anterior. Backend, Tester y Reviewer aprobaron; sin DML de prueba remoto.
+
 ## Seguimiento autorizado: asignaciones diarias reales
 
 Aplicado directamente en Supabase `20261020000000_daily_assignments.sql`,

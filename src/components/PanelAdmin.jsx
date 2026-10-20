@@ -726,7 +726,7 @@ export default function PanelAdmin() {
       {vistaActiva === "asignar" && <AsignarRutinas />}
 
       {/* VISTA 4: Calendario y Auditoría */}
-      {vistaActiva === "auditoria" && <CalendarioAuditoria />}
+      {vistaActiva === "auditoria" && <CalendarioAuditoria onAssign={() => setVistaActiva("asignar")} />}
 
       {/* VISTA DE TAREAS URGENTES */}
       {vistaActiva === "urgentes" && (

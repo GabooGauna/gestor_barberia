@@ -298,6 +298,77 @@ test("el calendario informa fallas de lectura y permite reintentar", async ({ pa
   await expect(page.getByRole("heading", { name: "Ana", exact: true })).toBeVisible();
 });
 
+test("asignaciones recupera el catálogo y una lectura diaria fallida sin marcar datos anteriores", async ({ page, supabaseMock }) => {
+  await page.clock.setFixedTime(new Date("2026-10-20T04:00:00Z"));
+  seedWork(supabaseMock);
+  supabaseMock.failTable("rutinas", "permission denied for function business_today");
+  await seedAuthSession(page, supabaseMock, admin);
+  await page.goto("/panel");
+  await page.getByRole("button", { name: /^Asignaciones/ }).click();
+  await expect(page.getByRole("alert")).toContainText("No se pudieron cargar");
+  supabaseMock.failures.delete("rutinas");
+  await page.getByRole("button", { name: "Reintentar", exact: true }).click();
+  supabaseMock.failTable("asignaciones_diarias", "permission denied for function business_today");
+  await page.getByRole("button", { name: "Ana Empleado", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("No se pudieron consultar las asignaciones");
+  expect(supabaseMock.rpcCalls.filter(({ rpc }) => rpc === "set_daily_routine_assignment")).toEqual([]);
+  supabaseMock.failures.delete("asignaciones_diarias");
+  await page.getByRole("button", { name: "Reintentar", exact: true }).click();
+  const routineButton = page.getByRole("button", { name: routine.titulo, exact: true });
+  await expect(routineButton).toHaveAttribute("aria-pressed", "false");
+  await routineButton.click();
+  await expect(routineButton).toHaveAttribute("aria-pressed", "true");
+  expect(supabaseMock.rpcCalls.find(({ rpc }) => rpc === "set_daily_routine_assignment")?.body.p_fecha).toBe("2026-10-20");
+});
+
+test("una falla de asignaciones conserva los cumplimientos históricos y los indicadores confirmados", async ({ page, supabaseMock }) => {
+  await page.clock.setFixedTime(new Date("2026-10-20T04:00:00Z"));
+  seedWork(supabaseMock);
+  // Historical completions predate the dated-assignment table and must stand alone.
+  supabaseMock.setTable("asignaciones_diarias", []);
+  supabaseMock.failTable("asignaciones_diarias", "permission denied for function business_today");
+  await seedAuthSession(page, supabaseMock, admin);
+  await page.goto("/panel");
+  await page.getByRole("button", { name: /^Auditoría/ }).click();
+  const yesterday = page.locator('[data-date="2026-10-19"]');
+  await expect(yesterday.getByTestId("audit-assignment-dot")).toBeVisible();
+  await expect(page.getByRole("alert").first()).toBeVisible();
+  await yesterday.click();
+  await expect(page.getByRole("heading", { name: "Ana", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /Ver detalle de tareas/ }).click();
+  await expect(page.getByText(task.descripcion, { exact: true })).toBeVisible();
+  await expect(page.getByText("Indicación del lunes", { exact: true })).toBeVisible();
+  await expect(page.getByText("Resumen parcial · Revisá los estados disponibles", { exact: true })).toBeVisible();
+  await expect(page.getByText("Realizadas: 2 de 2", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Cancelar tarea urgente/ })).toHaveCount(0);
+  supabaseMock.failures.delete("asignaciones_diarias");
+  await page.getByRole("button", { name: /Reintentar/ }).first().click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByText(task.descripcion, { exact: true })).toBeVisible();
+  await expect(page.getByText("Realizadas: 2 de 2", { exact: true })).toBeVisible();
+  expect(supabaseMock.mutations).toEqual([]);
+});
+
+test("auditoría ofrece asignar tareas de hoy y oculta la acción en consultas históricas", async ({ page, supabaseMock }) => {
+  await page.clock.setFixedTime(new Date("2026-10-20T04:00:00Z"));
+  seedWork(supabaseMock);
+  await seedAuthSession(page, supabaseMock, admin);
+  await page.goto("/panel");
+  await page.getByRole("button", { name: /^Auditoría/ }).click();
+  await page.getByRole("button", { name: "Asignar tareas de hoy", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Asignaciones del día", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Ana Empleado", exact: true }).click();
+  const routineButton = page.getByRole("button", { name: routine.titulo, exact: true });
+  await expect(routineButton).toHaveAttribute("aria-pressed", "false");
+  await routineButton.click();
+  await expect(routineButton).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: /^Auditoría/ }).click();
+  await page.locator('[data-date="2026-10-19"]').click();
+  await expect(page.getByRole("button", { name: "Asignar tareas de hoy", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Hoy", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Asignar tareas de hoy", exact: true })).toBeVisible();
+});
+
 for (const theme of ["light", "dark"]) {
   test(`calendario ${theme}: accesibilidad y responsive`, async ({ page, supabaseMock }, testInfo) => {
     await page.clock.setFixedTime(new Date("2026-10-20T04:00:00Z"));
