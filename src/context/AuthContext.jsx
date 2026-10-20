@@ -68,10 +68,12 @@ export function AuthProvider({ children }) {
         setProfile(null);
         setMfaRequired(true);
         setLoading(false);
-        if (!intentionalLogout.current) {
+        // INITIAL_SESSION sin sesión es una visita anónima normal. Auth emite
+        // SIGNED_OUT cuando descarta una sesión, incluido un refresh vencido.
+        if (event === "SIGNED_OUT" && !intentionalLogout.current) {
           setSessionIssue("La sesión venció. Ingresá nuevamente.");
         }
-        intentionalLogout.current = false;
+        if (event === "SIGNED_OUT") intentionalLogout.current = false;
         return;
       }
       if (["SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED", "INITIAL_SESSION", "MFA_CHALLENGE_VERIFIED"].includes(event)) {

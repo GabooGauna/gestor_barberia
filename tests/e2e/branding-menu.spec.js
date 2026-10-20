@@ -96,6 +96,8 @@ for (const viewport of [
     await trigger.click();
     await visibleMenu.getByRole("button", { name: "Cerrar sesión" }).click();
     await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("button", { name: "Iniciar sesión" })).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("sb-") && key.endsWith("-auth-token")))).toEqual([]);
     expect(supabaseMock.authRequests.some(({ path }) => path === "/auth/v1/logout")).toBe(true);
     expect(supabaseMock.mutations).toEqual([]);

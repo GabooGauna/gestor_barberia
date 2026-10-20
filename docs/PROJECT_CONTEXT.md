@@ -2,6 +2,12 @@
 
 ## Etapa 6 vigente — 20 de octubre de 2026
 
+Seguimiento puntual autorizado: login limpio en primera visita, sin advertencia
+tras logout voluntario. `INITIAL_SESSION` nulo ya no se interpreta como sesión
+vencida; se conserva el aviso ante `SIGNED_OUT` involuntario, incluido refresh
+inválido de una sesión persistida. Sin cambios de autenticación, permisos o
+Supabase. Evidencia en `docs/reviews/login-session-warning.md`.
+
 El propietario abrió expresamente Etapa 6 sobre los flujos aprobados de Etapa 5,
 con optimización, regresión, limpieza real puntual de pruebas/César y publicación
 GitHub–Vercel. No incorpora filtros avanzados pendientes ni cambia Auth/RLS.

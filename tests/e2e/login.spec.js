@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, seedAuthSession, TEST_PASSWORD, test } from "./fixtures/supabase-mock";
+import { expect, loginThroughUi, seedAuthSession, TEST_PASSWORD, test } from "./fixtures/supabase-mock";
 
 const admin = {
   id: "10000000-0000-4000-8000-000000000001",
@@ -11,6 +11,20 @@ const admin = {
 };
 
 test.describe("Supabase Auth y rutas protegidas", () => {
+  test("muestra el login limpio en la primera visita y al recargar sin sesión", async ({ page, supabaseMock }) => {
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: "Iniciar sesión" })).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(page.getByLabel("Usuario")).toHaveValue("");
+    await expect(page.getByLabel("Contraseña", { exact: true })).toHaveValue("");
+
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Iniciar sesión" })).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    expect(supabaseMock.authRequests).toEqual([]);
+    expect(supabaseMock.rpcCalls).toEqual([]);
+  });
+
   test("inicia sesión con username canónico y contraseña sin exponer PIN", async ({ page, supabaseMock }) => {
     supabaseMock.registerUser(admin, { password: TEST_PASSWORD });
     await page.goto("/");
@@ -31,6 +45,20 @@ test.describe("Supabase Auth y rutas protegidas", () => {
     expect(passwordRequest?.body.password).toBe(TEST_PASSWORD);
     expect(supabaseMock.rpcCalls.some(({ rpc }) => rpc === "get_current_employee_profile")).toBe(true);
     await expect.poll(() => page.evaluate(() => localStorage.getItem("usuarioBarberia"))).toBeNull();
+  });
+
+  test("mantiene el login limpio después del cierre voluntario y de recargar", async ({ page, supabaseMock }) => {
+    await loginThroughUi(page, supabaseMock, admin);
+    const menu = page.locator(".user-menu--desktop");
+    await menu.getByRole("button", { name: "Abrir menú de acciones" }).click();
+    await menu.getByRole("button", { name: "Cerrar sesión" }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("button", { name: "Iniciar sesión" })).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Iniciar sesión" })).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveCount(0);
   });
 
   test("usa un error genérico ante credenciales incorrectas", async ({ page, supabaseMock }) => {
@@ -58,6 +86,8 @@ test.describe("Supabase Auth y rutas protegidas", () => {
     await page.goto("/panel");
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("heading", { name: "Ingresar" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Iniciar sesión" })).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveCount(0);
     expect(supabaseMock.rpcCalls).toEqual([]);
   });
 
@@ -66,7 +96,7 @@ test.describe("Supabase Auth y rutas protegidas", () => {
     await page.goto("/panel");
 
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole("alert")).toContainText(/sesión|Ingresá nuevamente/i);
+    await expect(page.getByRole("alert")).toHaveText("La sesión venció. Ingresá nuevamente.");
     expect(supabaseMock.authRequests.some(({ query }) => query.includes("grant_type=refresh_token"))).toBe(true);
   });
 
