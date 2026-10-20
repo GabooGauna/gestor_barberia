@@ -155,6 +155,25 @@ class SupabaseMock {
       const task = (this.tables.get("tareas_urgentes") || []).find(({ id }) => id === body.p_urgent_id);
       if (task) task.cancelada_en = `${task.fecha}T15:00:00Z`;
     }
+    // Persist the existing completion contract so navigation can verify the same
+    // audit records. This is fixture behavior, not a substitute for SQL/RLS tests.
+    if (["set_task_completion", "set_urgent_completion"].includes(rpc)) {
+      const actor = this.users.get(authUserId)?.profile;
+      if (!actor?.activo) {
+        await route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ message: "permission_denied" }) }); return;
+      }
+      if (rpc === "set_task_completion") {
+        const date = await request.frame().evaluate(() => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date()));
+        const audits = this.tables.get("auditoria_diaria") || [];
+        const existing = audits.find((row) => row.empleado_id === actor.id && row.tarea_id === body.p_tarea_id && row.fecha === date);
+        if (existing) existing.anulada_en = body.p_completed ? null : `${date}T15:00:00Z`;
+        else if (body.p_completed) audits.push({ id: `audit-${audits.length + 1}`, empleado_id: actor.id, tarea_id: body.p_tarea_id, fecha: date, completado_en: `${date}T15:00:00Z`, anulada_en: null });
+        this.tables.set("auditoria_diaria", audits);
+      } else {
+        const urgent = (this.tables.get("tareas_urgentes") || []).find((row) => row.id === body.p_urgent_id && row.empleado_id === actor.id);
+        if (urgent) urgent.completada = body.p_completed;
+      }
+    }
     if (["set_task_completion", "set_urgent_completion", "cancel_urgent_task"].includes(rpc)) {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) }); return;
     }
@@ -222,6 +241,9 @@ class SupabaseMock {
     let rows = applyFilters(this.tables.get(table) ?? [], url.searchParams);
     const selection = url.searchParams.get("select") || "";
     if (selection.includes("rutinas(")) rows = rows.map((row) => ({ ...row, rutinas: row.rutinas || (this.tables.get("rutinas") || []).find(({ id }) => id === row.rutina_id) || null }));
+    if (url.searchParams.get("tareas_rutina.archivada_en") === "is.null") rows = rows.map((row) => ({
+      ...row, tareas_rutina: (row.tareas_rutina || []).filter((task) => task.archivada_en == null),
+    }));
     if (selection.includes("empleados(")) rows = rows.map((row) => ({ ...row, empleados: row.empleados || (this.tables.get("empleados") || []).find(({ id }) => id === row.empleado_id) || null }));
     if (selection.includes("tareas_rutina(")) rows = rows.map((row) => {
       if (row.tareas_rutina) return row;

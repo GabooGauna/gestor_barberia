@@ -2,6 +2,17 @@
 
 ## Etapa 6 vigente — 20 de octubre de 2026
 
+Ampliación puntual solicitada: administradores trabajan desde su misma cuenta
+en «Mis tareas», conservando las secciones administrativas. Reutiliza
+`PanelEmpleado`, con progreso diario (rutinas y urgencias) para ambos roles;
+Asignaciones identifica la cuenta propia con «(vos)». Los contratos existentes
+ya permiten destinatarios administradores activos y cumplimiento por identidad
+autenticada; sin migraciones ni cambios Auth/RLS. Las consultas personales
+incluyen UUID, fecha argentina, cancelaciones/anulaciones y filtros explícitos
+de archivado (el administrador tiene lectura más amplia). Asignaciones diarias,
+plantillas e historial conservan su semántica. Evidencia y handoffs en
+`docs/reviews/admin-own-tasks.md`.
+
 Seguimiento puntual autorizado: login limpio en primera visita, sin advertencia
 tras logout voluntario. `INITIAL_SESSION` nulo ya no se interpreta como sesión
 vencida; se conserva el aviso ante `SIGNED_OUT` involuntario, incluido refresh

@@ -187,7 +187,7 @@ test("al cambiar de persona una respuesta atrasada no restaura asignaciones ajen
   await page.getByRole("button", { name: "Ana Empleado", exact: true }).click();
   await expect.poll(() => businessReads(supabaseMock, "asignaciones_diarias").length).toBeGreaterThan(0);
   supabaseMock.delays.delete("asignaciones_diarias");
-  await page.getByRole("button", { name: "Administración Administración", exact: true }).click();
+  await page.getByRole("button", { name: "Administración (vos) Administración", exact: true }).click();
   const routineButton = page.getByRole("button", { name: routine.titulo, exact: true });
   await expect(routineButton).toHaveAttribute("aria-pressed", "false");
   // Wait for the original server response, then recheck the selected person's state.

@@ -6,7 +6,7 @@ Convertir el prototipo en una herramienta segura y profesional para organizar ru
 
 ## Usuarios
 
-- **Administrador:** administra equipo, plantillas, asignaciones, urgencias y auditoría.
+- **Administrador:** administra equipo, plantillas, asignaciones, urgencias y auditoría; también realiza tareas asignadas a su propia cuenta.
 - **Empleado/barbero:** consulta únicamente su trabajo permitido y registra cumplimiento.
 - **Responsable operativo:** posible rol de consulta histórica; debe confirmarse antes de modelarlo.
 
@@ -41,6 +41,11 @@ Convertir el prototipo en una herramienta segura y profesional para organizar ru
 - Evitar manipular credenciales desde tablas públicas.
 - Evitar asignaciones duplicadas.
 - Explicar impacto de acciones destructivas y aplicar conservación aprobada.
+- Permitir autoasignación administrativa sin otra cuenta ni cambio de rol.
+- Ofrecer «Mis tareas» en administración con trabajo vigente de hoy, cumplimiento
+  reversible y progreso diario compartidos con el panel de empleados. Registrar
+  el trabajo con la identidad propia en la auditoría común; cada nuevo día sin
+  asignaciones heredadas, conservando plantillas e historial.
 
 ### Trabajo del empleado
 

@@ -1,5 +1,15 @@
 # Pruebas locales de Etapa 4
 
+## Administradores con tareas propias (ampliación de Etapa 6)
+
+`node scripts/admin-own-tasks-drill.mjs` ejecuta
+`08_admin_own_tasks_test.sql` sobre toda la cadena de contratos diarios, en un
+PostgreSQL Docker local descartable para Windows. Usa imagen ya instalada,
+sin red, puertos ni montajes. Verifica autoasignación, cumplimiento/anulación,
+actor auditado, urgencias propias, AAL2, aislamiento entre integrantes y
+conservación del historial. El SQL hace rollback y el runner comprueba la
+preservación del baseline y elimina el contenedor. No acepta un destino remoto.
+
 ## Ensayo suplementario de respaldo
 
 `node scripts/stage04-restore-drill.mjs` desde la raíz ejecuta sólo Docker

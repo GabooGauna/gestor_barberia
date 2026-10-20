@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { supabase } from "../services/supabase";
 import { useBusinessDate } from "../hooks/useBusinessDate";
 import { currentBusinessDate } from "../utils/businessDate";
+import { useAuth } from "../hooks/useAuth";
 
 export default function AsignarRutinas() {
+  const { profile } = useAuth();
   const today = useBusinessDate();
   const [catalog, setCatalog] = useState({ employees: [], routines: [], loading: true, error: false });
   const [employeeId, setEmployeeId] = useState("");
@@ -84,7 +86,7 @@ export default function AsignarRutinas() {
               <button type="button" key={person.id} aria-pressed={person.id === employeeId} disabled={saving}
                 onClick={() => setEmployeeId(person.id)}
                 className={`choice-card p-3 text-left rounded-xl border-2 ${person.id === employeeId ? "bg-blue-50 border-blue-500 text-blue-900" : "bg-gray-50 border-gray-200 text-gray-700"}`}>
-                <span className="block font-semibold">{person.nombre}</span>
+                <span className="block font-semibold">{person.nombre}{person.id === profile?.id ? " (vos)" : ""}</span>
                 <span className="text-xs">{person.rol === "admin" ? "Administración" : "Empleado"}</span>
               </button>
             ))}

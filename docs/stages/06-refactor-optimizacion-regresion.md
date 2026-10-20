@@ -29,6 +29,18 @@ independiente en `docs/reviews/stage-06-review.md`.
 
 ## Alcance
 
+### Ampliación puntual autorizada — administradores con tareas (20/10/2026)
+
+El propietario autoriza incorporar «Mis tareas» al panel administrativo,
+autoasignación con la cuenta existente, cumplimiento/pendiente de rutinas y
+urgencias, progreso diario e identificación en la auditoría común. Esta solicitud
+sustituye el congelamiento de producto sólo para este flujo. Se reutilizan los
+contratos diarios y componentes existentes; se conservan rol, MFA, historial,
+colores y temas. Sin cuentas duplicadas ni cambios remotos de datos de prueba.
+Commit/push para publicación GitHub–Vercel expresamente autorizados tras lint,
+build, E2E y revisión independiente. Handoffs/evidencia en
+`docs/reviews/admin-own-tasks.md`.
+
 - Separar datos, sesión, dominio y presentación donde aporte claridad.
 - Centralizar contratos/tipos, errores y fechas.
 - Eliminar código/assets/dependencias muertos con evidencia.

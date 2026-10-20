@@ -16,6 +16,7 @@ import {
 } from "../utils/coloresRutina";
 
 const CalendarioAuditoria = lazy(() => import("./CalendarioAuditoria"));
+const PanelEmpleado = lazy(() => import("./PanelEmpleado"));
 
 function RoutineColorPicker({ name, value, onChange, disabled = false }) {
   return (
@@ -46,7 +47,7 @@ function RoutineColorPicker({ name, value, onChange, disabled = false }) {
 
 export default function PanelAdmin() {
   const { profile, refreshProfile } = useAuth();
-  const [vistaActiva, setVistaActiva] = useState("plantillas"); // 'plantillas', 'empleados', o 'auditoria'
+  const [vistaActiva, setVistaActiva] = useState("plantillas");
 
   // Estados del Creador de Plantillas
   const [rutinas, setRutinas] = useState([]);
@@ -87,6 +88,7 @@ export default function PanelAdmin() {
     ["empleados", "Equipo", "Perfiles y roles"],
     ["asignar", "Asignaciones", "Rutinas de hoy"],
     ["urgentes", "Urgencias", "Trabajo extraordinario"],
+    ["mis-tareas", "Mis tareas", "Mi jornada de hoy"],
     ["auditoria", "Auditoría", "Cumplimiento diario"],
   ];
 
@@ -383,7 +385,7 @@ export default function PanelAdmin() {
 
   return (
     <div className="admin-layout">
-      {/* Barra de Navegación Superior de 5 Solapas */}
+      {/* Navegación administrativa */}
       <nav className="section-nav" aria-label="Secciones de administración">
         {secciones.map(([id, title, detail]) => (
           <button
@@ -400,6 +402,12 @@ export default function PanelAdmin() {
       </nav>
 
       <div className="admin-content">
+
+      {vistaActiva === "mis-tareas" && (
+        <Suspense fallback={<p role="status">Cargando tus tareas…</p>}>
+          <PanelEmpleado usuario={profile} titulo="Mis tareas" />
+        </Suspense>
+      )}
 
       {/* VISTA 1: Creador de Plantillas */}
       {vistaActiva === "plantillas" && (

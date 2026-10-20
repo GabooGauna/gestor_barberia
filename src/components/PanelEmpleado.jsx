@@ -11,7 +11,7 @@ import {
 import { currentBusinessDate } from "../utils/businessDate";
 import { useBusinessDate } from "../hooks/useBusinessDate";
 
-export default function PanelEmpleado({ usuario }) {
+export default function PanelEmpleado({ usuario, titulo = "Mis Protocolos Asignados" }) {
   const [rutinasAsignadas, setRutinasAsignadas] = useState([]);
   const [tareasUrgentes, setTareasUrgentes] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -48,7 +48,9 @@ export default function PanelEmpleado({ usuario }) {
         const { data: datosRutinas, error: errRutinas } = await supabase
           .from("rutinas")
           .select(selection)
-          .in("id", idsRutinas);
+          .in("id", idsRutinas)
+          .is("archivada_en", null)
+          .is("tareas_rutina.archivada_en", null);
 
         if (errRutinas) throw errRutinas;
         nuevasRutinas = (datosRutinas || []).map((rutina) => ({
@@ -176,11 +178,12 @@ export default function PanelEmpleado({ usuario }) {
     <div className="space-y-6">
       <div className="surface-panel p-6">
         <h2 className="text-xl font-bold text-gray-800 mb-1">
-          Mis Protocolos Asignados
+          {titulo}
         </h2>
         <p className="text-sm text-gray-500">
           Hola {usuario?.nombre}, revisa tus tareas y avisos urgentes del día.
         </p>
+        <DailyProgress rutinas={rutinasAsignadas} urgentes={tareasUrgentes} completadas={completadasHoy} fecha={hoy} />
       </div>
 
       {/* SECCIÓN DE TAREAS URGENTES (Destacadas en color ámbar/naranja) */}
@@ -316,5 +319,21 @@ export default function PanelEmpleado({ usuario }) {
         ))
       )}
     </div>
+  );
+}
+
+function DailyProgress({ rutinas, urgentes, completadas, fecha }) {
+  const ids = [...rutinas.flatMap((rutina) => rutina.tareas_rutina.map(({ id }) => id)), ...urgentes.map(({ id }) => id)];
+  const realizadas = ids.filter((id) => completadas[id]).length;
+  const porcentaje = ids.length ? Math.round(realizadas / ids.length * 100) : 0;
+  return (
+    <section className="daily-progress mt-4" aria-label="Progreso diario">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <h3 className="font-semibold">Progreso del {fecha.split("-").reverse().join("/")}</h3>
+        <span role="status">{realizadas} de {ids.length} tareas completadas · {porcentaje}%</span>
+      </div>
+      <progress className="daily-progress__bar" aria-label="Tareas completadas hoy" value={realizadas} max={ids.length || 1} />
+      <p className="text-sm text-gray-500">{ids.length ? `${ids.length - realizadas} pendientes · Incluye tareas urgentes` : "Sin tareas asignadas para hoy"}</p>
+    </section>
   );
 }
