@@ -1,13 +1,13 @@
 # Etapa 4 — Frontend en Vercel, backend en Supabase
 
-Checkpoint vigente del 20 de octubre: propietario confirmó integración existente
-y autorizó commits/push. Lectura GitHub confirmó `main`, origen
-`GabooGauna/gestor_barberia` y status Vercel success del commit remoto anterior,
-proyecto existente `gaboogaunas-projects/gestor-barberia`, dominio informado abajo.
-No crear otro proyecto ni exigir vinculación CLI. El commit de publicación
-habilita `git.deploymentEnabled=true`; se publica Auth con color OFF y el
-backend permanece en mantenimiento hasta aceptación real. La sección histórica
-de CLI no es un prerrequisito de esta integración existente.
+Checkpoint vigente del 20 de octubre: integración GitHub–Vercel existente usada,
+sin proyectos duplicados. Publicaciones `c03511e` Auth y `cc8a40d` colores,
+ambas status success; Production true verificado en artefacto
+`/assets/index-BPXc_bpY.js`, origen Supabase correcto. `/` y `/panel` 200.
+Auth/RLS/MFA/Edge y color aceptados por Reviewer, servicio abierto después de
+los controles reales y de preservar los colores confirmados por el propietario.
+`git.deploymentEnabled=true`; no se necesita CLI ni crear/linkear otro proyecto.
+La cronología y secuencia siguientes no autorizan repetir pasos completados.
 
 Decisión del propietario: 18 de octubre de 2026. Vercel es el destino elegido.
 Actualización: propietario confirmó las tres variables y dominio
@@ -103,17 +103,16 @@ promover un despliegue anterior que use PIN ni desactivar RLS para recuperarlo.
 Color puede volver a OFF mediante otro build sin eliminar la columna/datos.
 No confundir mantenimiento visual de Vercel con contención REST/Auth/Edge.
 
-## Evidencia actual y pendiente
+## Evidencia actual
 
-Integración GitHub–Vercel existente y publicación Auth `c03511e` verificadas;
-dominio y `/panel` 200, artefacto Auth correcto y color inicialmente OFF.
-Auth/RLS/Edge y MFA reales aceptados por Reviewer. La migración color ya se
-aplicó por separado con integridad intacta; mantenimiento activo mientras se
-confirma la variable Production true y se publica/verifica el artefacto color.
-No solicitar mecanismo imposible de suspensión interna ni repetir respaldos:
-rige el alcance residual expresamente aceptado en la decisión de corte.
-No hay Etapa 5. Evidencia detallada en
-`../reviews/stage-04-controlled-cutover-checkpoint.md`.
+Integración, dominio, artefacto y bandera Production true verificados.
+Login/MFA y UI admin reales aprobados; roles/RLS y lectura/edición denegada
+API empleado comprobados. Color admin probado con cambio y restauración;
+colores posteriores del propietario confirmados y preservados. Servicio abierto,
+in-flight cero. Las suites locales previamente aprobadas no se repitieron.
+Límites de respaldo/recuperación y aceptación de riesgo residual se conservan,
+sin RPO 0 absoluto ni recuperación integral del proveedor. No Etapa 5.
+Evidencia: `../reviews/stage-04-controlled-cutover-checkpoint.md`.
 
 Fuentes oficiales: [Vite/SPA](https://vercel.com/docs/frameworks/frontend/vite),
 [variables](https://vercel.com/docs/environment-variables),

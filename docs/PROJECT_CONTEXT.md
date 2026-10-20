@@ -10,20 +10,25 @@
 
 ## Estado local de Etapa 4
 
-Checkpoint vigente del 20 de octubre: Auth/RLS/Edge aceptados en producción.
-Ambos perfiles conservan UUID; seis conjuntos históricos y tres asignaciones
-recuperadas coinciden. Frontend Auth publicado por GitHub–Vercel en `c03511e`;
-propietario completó login y MFA. Pruebas reales: admin AAL2 y empleado AAL1 ven
-exactamente los conjuntos autorizados; perfil ajeno del empleado bloqueado,
-Edge bloquea AAL2 durante mantenimiento y admite/rechaza un destino inexistente
-al abrir, sin mutaciones Auth/negocio. Reviewer aprobó el gate Auth remoto.
-Después se cerró mantenimiento y se aplicó por separado únicamente
-`20261016000000_add_rutinas_color.sql`: ACK, default/constraint y conservación
-íntegra de históricos/UUID verificados. Mantenimiento true/in-flight cero.
-Pendiente variable Production de Vercel true, publicación del artefacto de
-colores, reapertura controlada y comprobación real de edición admin/lectura y
-edición denegada empleado. No Etapa 5. La cronología siguiente no autoriza
-repetir operaciones ya completadas.
+Checkpoint vigente del 20 de octubre: desplegados y aceptados Auth/RLS/MFA,
+Edge admin-users y colores de rutinas en el proyecto Supabase existente.
+Frontend publicado mediante GitHub–Vercel: `c03511e` Auth y `cc8a40d` colores;
+artefacto `/assets/index-BPXc_bpY.js`, bandera Production true comprobada.
+Se mantienen los dos UUID de empleados y los seis conjuntos históricos,
+incluidas tres asignaciones recuperadas. Admin AAL2 y empleado AAL1 acceden
+exactamente a los UUID permitidos; anónimo/AAL1 administrativo/usuario ajeno
+bloqueados. MFA nativo configurado y acceso real del propietario aprobado.
+Color probado por UI administrativa copper→sage→copper con ACK/readback;
+empleado real API lee sage y PATCH del valor actual devuelve 200 sin filas.
+No se atribuye esa prueba API al navegador real del empleado; su UI local
+aprobada se conserva. Después el propietario cambió los cinco colores y
+confirmó expresamente conservarlos: steel2/plum1/sage2. No se sobrescribieron.
+Servicio abierto: mantenimiento false e in-flight cero, con ACK y lectura
+fresca. Reviewer independiente aprobó el alcance desplegado. No Etapa 5.
+El respaldo definitivo verificado sigue siendo preexpand; recuperación Auth
+usa reset/reprovisión/reenrolamiento, no restauración exacta del factor actual.
+Se conservan los límites de riesgo residual y custodia aprobados. La cronología
+siguiente no autoriza repetir migraciones, provisiones o pruebas completadas.
 
 Avance remoto posterior: administrador inicial `admin.gns` creado por Admin API
 y vinculado por bootstrap al perfil existente, sin cambiar UUID/históricos.

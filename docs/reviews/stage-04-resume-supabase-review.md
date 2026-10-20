@@ -1709,3 +1709,78 @@ defecto de política; no se presenta como garantía bajo cambios concurrentes.
 La evidencia resultante será lectura/denegación API real de empleado, no prueba
 automática de su navegador/UI. El flujo administrativo sí requiere UI real y
 restauración explícita de su valor original. No ejecución real atribuida aún.
+
+## Dictamen final del alcance desplegado — 20 de octubre
+
+**APROBADO Auth/RLS/MFA/Edge y color entregado por separado, con aceptación real
+del alcance revisado. Sin hallazgos bloqueantes/altos nuevos pendientes.** Este
+resultado sustituye los pendientes operativos de publicación/apertura/color de
+los checkpoints anteriores, conservando sus límites y trazabilidad.
+
+Evidencia final entregada por Orquestador:
+
+- Propietario confirmó flag Production true; commit cc8a40d publicado por main,
+  Vercel success deployment G14gu5UTJPZ3EiauataoCyfp869C. Dominio HTTP200,
+  index-BPXc_bpY.js con Auth/MFA/ref esperados y color compilado TRUE.
+- Inspect postcolor opening_ready=true/inflight cero; Open explícito con
+  RoutineColorApplied devuelve ACK y lectura fresca maintenance=false.
+- Administrador AAL2 en navegador controlado y artefacto nuevo cambió una rutina
+  asignada de copper a sage mediante radio UI; éxito/selección/readback REST.
+  EmployeeColor real leyó sage de esa asignación y PATCH del mismo valor devolvió
+  200 array vacío; sesión de prueba cerrada. Administrador restauró copper por
+  radio UI con éxito y readback. No otros campos alterados.
+- Lectura TLS final: seis conteos/UUID/hashes legados exactos del baseline,
+  incluidas tres asignaciones recuperadas; defectos, escritores inesperados y
+  transacciones abiertas cero. Color presente; un factor TOTP verificado y una
+  sesión AAL2 administrativa, maintenance=false/inflight cero.
+
+Reviewer registra esta evidencia sobre los caminos previamente inspeccionados,
+sin ejecutar operaciones remotas, abrir secretos ni repetir suites aprobadas.
+La prueba de empleado es API real de lectura/edición denegada junto a UI local
+previamente aprobada; no se atribuye un navegador empleado real. La reversión
+del color conserva el estado original y seis históricos íntegros. No quedan
+acciones técnicas nuevas exigidas por esta revisión para ese alcance; procede
+sincronizar documentación/commit de evidencia y push ya autorizado, sin nuevas
+migraciones ni Etapa 5.
+
+Persisten los límites expresamente documentados/aceptados: corte con riesgo
+residual, no RPO0 absoluto ni garantía exhaustiva de writers del proveedor;
+respaldo 2abb del baseline preexpand, no copia del Auth/factores posteriores;
+recuperación privilegiada y reenrolamiento, custodia DPAPI ligada al usuario/
+equipo y decisiones de custodia pospuestas por el propietario. No se transforma
+este dictamen en garantía global de recuperación completa Supabase/RTO integral,
+ni se ocultan las limitaciones históricas. La documentación final debe reflejar
+servicio abierto y gates ahora completados, distinguiendo estos límites.
+
+## Observación posterior: cierre preventivo temporal — 20 de octubre
+
+**Estado vigente: mantenimiento cerrado temporalmente**, posterior al PASS
+anterior. Orquestador entregó una nueva lectura de cinco colores: steel dos,
+plum uno y sage dos; no coincide con la expectativa all-copper de ese control
+posterior. La rutina de prueba sí había confirmado copper por readback al
+finalizar la aceptación. No se atribuye autor/causa ni pérdida de datos sin
+confirmación del propietario y no se sobrescriben valores actuales.
+
+Close explícito ACK/fresh maintenance=true e inflight cero entregados. Las
+aceptaciones Auth/RLS/MFA/Edge/color previas permanecen como evidencia de su
+instante; no acreditan servicio actualmente abierto ni all-copper actual.
+Se solicita confirmar si estos cambios son intencionales. Si el propietario
+los reconoce, conservarlos y reabrir con Inspect/Open RoutineColorApplied y
+ACK/lectura fresca ya revisados, sin nuevas suites/auditorías: copper es default
+inicial y valor original de la prueba, no un invariante perpetuo del producto.
+Si no los reconoce, mantener cierre y aclarar alcance antes de reparar.
+
+## Confirmación del propietario y reapertura final — 20 de octubre
+
+El propietario respondió explícitamente «Sí, son mis cambios; conservarlos».
+Queda aclarada la observación posterior: los colores steel dos/plum uno/sage
+dos son ediciones intencionales y se preservaron sin escrituras adicionales
+de color. No hubo restauración a copper ni reparación de datos no autorizada.
+
+Orquestador entrega Open -Authorized -RoutineColorApplied con ACK tipado y
+lectura fresca maintenance=false/inflight cero. **Estado vigente: servicio
+abierto; alcance Auth/RLS/MFA/Edge/color aprobado.** Cerrado el pendiente de
+confirmación del propietario del apartado anterior, sin repetir pruebas o
+auditorías. Los límites de recuperación/riesgo residual del dictamen final se
+conservan. Sólo resta sincronizar/commit/push de evidencia ya autorizados;
+no nuevas operaciones de negocio, migraciones o Etapa 5 por esta revisión.

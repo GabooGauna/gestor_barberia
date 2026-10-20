@@ -1,5 +1,14 @@
 # Runbook de despliegue seguro — Etapa 4
 
+Checkpoint vigente del 20 de octubre: despliegue Auth/RLS/MFA/Edge aceptado;
+color entregado después como operación independiente y Vercel publicado.
+Servicio abierto, maintenance=false/in-flight0 confirmado. No repetir ninguna
+migración/provisión completada ni usar db push para resolver el ledger CLI.
+Se aplicaron expand, cutover, suplemento operativo y, después, color mediante
+SQL específico; se conservan los UUID e históricos. Reviewer final aprobado.
+La cronología siguiente se conserva como evidencia, no como pasos pendientes.
+Estado detallado en `../reviews/stage-04-controlled-cutover-checkpoint.md`.
+
 Checkpoint vigente del 19 de octubre: recuperadas las tres asignaciones
 históricas y aplicada expand Auth, tras respaldo definitivo cifrado y restore
 aislado supervisados (`2abb1ac7f0d7611a54ab8b1ced9d7afe`). Conciliación de las

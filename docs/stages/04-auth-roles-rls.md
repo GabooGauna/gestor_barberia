@@ -2,6 +2,17 @@
 
 ## Estado
 
+**Despliegue real aceptado el 20 de octubre de 2026.** Auth, vinculación de ambos
+perfiles existentes, RLS FORCE, MFA administrativo y Edge desplegados;
+frontend GitHub–Vercel `c03511e` y `cc8a40d` verificado. Color aplicado después
+por separado, probado UI admin/API empleado y habilitado en Production.
+Integridad de seis tablas e históricos intacta. Reviewer aprobó evidencia real;
+servicio abierto con maintenance=false/in-flight0. Colores editados después por
+propietario confirmados y preservados. No Etapa 5 ni garantía de RPO 0 absoluto
+/recuperación integral Supabase. Evidencia y límites en
+`../reviews/stage-04-controlled-cutover-checkpoint.md` y dictamen independiente
+`../reviews/stage-04-resume-supabase-review.md`. Lo siguiente es cronología.
+
 Checkpoint vigente del 18 de octubre: credencial/CA/TLS resueltos; respaldo
 preparatorio existente cifrado, clave recuperada y restore PostgreSQL aislado
 PASS con comparación delimitada de conteos/UUID/FK y roles. No se recaptura ni

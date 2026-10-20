@@ -232,3 +232,46 @@ Nuevo transporte EmployeeRead: 28 guardas + parser/hash vacío PASS;
 EmployeeColor: 12 guardas + parser PASS. No suites/backup/restore repetidos.
 Pendiente confirmación del propietario de la variable Production true antes
 del push que publicará colores y de las verificaciones finales de esa capacidad.
+
+## Aceptación final y servicio abierto — 20 de octubre
+
+Propietario confirmó Production VITE_ENABLE_RUTINAS_COLOR=true. Push `cc8a40d`
+por integración GitHub–Vercel existente: success, deployment
+`G14gu5UTJPZ3EiauataoCyfp869C`. Artefacto `/assets/index-BPXc_bpY.js`: Auth,
+MFA manual, referencia Supabase correcta y bandera compilada de colores true.
+Inspect postcolor ready/in-flight0 y Open explícito devolvieron ACK y freshread
+maintenance=false/in-flight0. No otras migraciones ni db push.
+
+Admin AAL2, UI publicada: selección de rutina ya asignada, radio sage,
+confirmación de guardado y REST readback sage; empleado AAL1 API leyó esa
+rutina/color y PATCH del MISMO valor con return=representation respondió
+200 array vacío. Denegación comprobada, sin mutar el valor. Logout propio.
+Admin UI restauró copper con confirmación/readback. No se alteraron otros
+campos. Seis conteos y hashes UUID/legacy idénticos al baseline; defectos,
+writers y TX inesperadas cero. MFA verificado; ninguna admisión pendiente.
+Esto no se presenta como prueba de navegador real empleado: es API real más
+UI aislada previamente aprobada, sin repetir esa suite.
+
+Después de esos controles el propietario editó los colores de las cinco rutinas
+(steel2/plum1/sage2). Una comprobación contra el baseline de cobre detectó la
+diferencia y se cerró mantenimiento temporalmente sin sobrescribir datos.
+El propietario confirmó «Sí, son mis cambios; conservarlos». Se preservaron y
+se ejecutó Open postcolor revisado: ACK/fresh maintenance=false e in-flight0.
+No es una anomalía de integridad ni exige copper global después de uso legítimo.
+Reviewer cerró el dictamen aprobado con el estado actual abierto.
+
+Migraciones aplicadas específicamente, por este orden efectivo:
+1. `20261016010000_auth_profiles_expand.sql`.
+2. Bootstrap/vinculaciones por RPC y conciliación de los UUID existentes.
+3. `20261016020000_auth_rls_cutover.sql` +
+   `20261017000000_security_operations.sql`, transacción atómica revisada.
+4. Tras aceptación Auth, `20261016000000_add_rutinas_color.sql` independiente.
+
+Respaldo definitivo verificado `2abb1ac7f0d7611a54ab8b1ced9d7afe` conservado,
+sin recaptura innecesaria. Preexpand: no contiene el factor MFA posterior;
+recuperación con reset privilegiado/reprovisión/reenrolamiento, no PIN/anon.
+Riesgo residual del proveedor y cambio propio por API Auth aceptados siguen
+vigentes. No se afirma RPO 0 absoluto ni RTO integral de cuatro horas medido.
+Entrega privada de credencial del empleado corresponde al administrador;
+archivo DPAPI existente fuera del repo, no divulgado. Suplente/bóveda/ubicación
+permanente siguen pospuestos según decisión del propietario. No Etapa 5.
