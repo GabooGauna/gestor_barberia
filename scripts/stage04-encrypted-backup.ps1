@@ -5,11 +5,28 @@ single full-database pg_dump snapshot plus a separate roles-only export.
 Only authenticated ciphertext is written to disk; passwords use process stdin.
 It does not freeze writers, restore a database, deploy or establish RPO 0.
 The key is wrapped with current-user Windows DPAPI, NOT portable key custody.
+An optional exported snapshot belongs to a separately supervised lock holder;
+this script alone never certifies that holder, writer freeze or RPO 0.
 #>
+param(
+    [ValidatePattern('^[0-9A-Fa-f]+-[0-9A-Fa-f]+-[0-9]+$')]
+    [string] $ExportedSnapshot,
+    [ValidatePattern('^[0-9a-f]{32}$')]
+    [string] $SupervisionRunId
+)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-if ($args.Count -ne 0) { throw 'No arguments are accepted.' }
+$argumentVariable=Get-Variable -Name args -Scope Local -ErrorAction SilentlyContinue
+if ($null -ne $argumentVariable -and @($argumentVariable.Value).Count -gt 0) { throw 'Unexpected positional arguments are not accepted.' }
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Windows DPAPI is required.' }
+
+function Get-Stage04DumpArguments {
+    param([Parameter(Mandatory=$true)][string] $Connection,[string] $Snapshot)
+    if ($Snapshot -and $Snapshot -cnotmatch '^[0-9A-Fa-f]+-[0-9A-Fa-f]+-[0-9]+$') { throw 'Exported snapshot identifier rejected.' }
+    $arguments=@('pg_dump','--password','--format=custom','--dbname',$Connection)
+    if ($Snapshot) { $arguments+=@('--snapshot',$Snapshot) }
+    return $arguments
+}
 
 # Reuse only the reviewed guard function definitions, never execute the intake
 # script body (which prompts/stores a credential). Both scripts share this repo.
@@ -42,7 +59,8 @@ function Invoke-BinaryProcess {
         [byte[]] $Prefix = @(),
         [byte[]] $Payload = @(),
         [Security.SecureString] $Password,
-        [int] $MaximumBytes = 268435456
+        [int] $MaximumBytes = 268435456,
+        [switch] $AllowEmpty
     )
     $startInfo = New-Object Diagnostics.ProcessStartInfo
     $startInfo.FileName = $Executable
@@ -110,7 +128,7 @@ function Invoke-BinaryProcess {
             elseif ($errorTask.Result -match 'permission denied') { $category = 'insufficient_backup_permissions' }
             throw ('Capture failed: ' + $category)
         }
-        if ($memory.Length -eq 0) { throw 'Empty process output was rejected.' }
+        if ($memory.Length -eq 0 -and -not $AllowEmpty) { throw 'Empty process output was rejected.' }
         return ,$memory.ToArray()
     } finally {
         if ($started -and -not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
@@ -198,17 +216,20 @@ try {
     $cryptoHelper = Join-Path $PSScriptRoot 'stage04-backup-crypto.mjs'
     if (-not [IO.File]::Exists($cryptoHelper)) { throw 'Crypto helper is unavailable.' }
     $image = 'postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24'
-    $identifier = [Guid]::NewGuid().ToString('N')
+    $identifier = if ($SupervisionRunId) { $SupervisionRunId } else { [Guid]::NewGuid().ToString('N') }
     $startedUtc = [DateTime]::UtcNow.ToString('o')
     $connection = 'host=' + $record.Host + ' port=5432 user=postgres.ucmwykzrepmjucssjnum dbname=postgres sslmode=verify-full sslrootcert=/run/gestor-prod-ca.crt connect_timeout=15'
+    if ($SupervisionRunId) { $connection += ' application_name=stage04_capture_' + $SupervisionRunId }
     $caMount = 'type=bind,source=' + $certificatePath + ',destination=/run/gestor-prod-ca.crt,readonly'
     $readContainerArgs = @('--host', $dockerEndpoint, 'run', '--rm', '--log-driver', 'none', '-i', '--read-only', '--network', 'bridge', '--user', 'postgres', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--memory', '512m', '--pids-limit', '64', '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m', '--mount', $caMount)
+    if ($SupervisionRunId) { $readContainerArgs += @('--memory-swap','512m') }
 
     # Full database: no schema exclusion, --no-owner, or --no-acl fallback. Any
     # inaccessible managed object blocks this candidate instead of shrinking it.
     $activeContainer = 'stage04-readbackup-' + $identifier + '-db'
     $failureStage = 'full_database_snapshot'
-    $dump = Invoke-BinaryProcess -Executable $docker -Arguments ($readContainerArgs + @('--name', $activeContainer, $image, 'pg_dump', '--password', '--format=custom', '--dbname', $connection)) -Password $record.Credential.Password
+    $dumpArguments=@(Get-Stage04DumpArguments -Connection $connection -Snapshot $ExportedSnapshot)
+    $dump = Invoke-BinaryProcess -Executable $docker -Arguments ($readContainerArgs + @('--name', $activeContainer, $image) + $dumpArguments) -Password $record.Credential.Password
     $activeContainer = $null
     if ($dump.Length -lt 5 -or [Text.Encoding]::ASCII.GetString($dump, 0, 5) -cne 'PGDMP') { throw 'Unexpected database archive format.' }
     $activeContainer = 'stage04-readbackup-' + $identifier + '-roles'
@@ -258,6 +279,13 @@ try {
         FullSupabaseRecoveryVerified = $false; RtoHoursTarget = 4; RtoVerified = $false
         Limitations = @('Preparatory snapshot only; writers were not frozen by this script.', 'DATABASE properties/owner/ACL/settings must be inventoried and validated on restore.', 'Auth/provider configuration, secrets, signing/encryption keys, Edge and Storage objects require separate inventory/custody.', 'Roles export is not atomic with database snapshot; provider-protected roles need reviewed restore mapping.', 'DPAPI key recovery requires this Windows user/computer; independent key custody remains pending.')
     }
+    if ($ExportedSnapshot) {
+        $manifest | Add-Member -NotePropertyName ExportedSnapshot -NotePropertyValue $ExportedSnapshot
+        $manifest | Add-Member -NotePropertyName SnapshotHolderVerifiedByThisScript -NotePropertyValue $false
+        # Roles remain a separate export; the caller must enforce quiescence,
+        # fresh drift checks, holder liveness and restore before any cutover.
+    }
+    if ($SupervisionRunId) { $manifest | Add-Member -NotePropertyName SupervisionRunId -NotePropertyValue $SupervisionRunId }
     $manifestBytes = [Text.Encoding]::UTF8.GetBytes(($manifest | ConvertTo-Json -Depth 5))
     Write-NewPrivateFile -LiteralPath ([IO.Path]::Combine($backupDirectory, 'manifest.json')) -Bytes $manifestBytes -OwnerSid $ownerSid
     Write-Host 'Encrypted preparatory database snapshot saved. Restore, portable key custody and cutover gates remain pending.'

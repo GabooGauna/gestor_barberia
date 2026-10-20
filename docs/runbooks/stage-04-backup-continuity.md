@@ -1,5 +1,11 @@
 # Etapa 4 — Respaldo, seguridad operativa y continuidad
 
+Decisión posterior vigente: preparar y ensayar RPO 0 de negocio/runtime Auth;
+metadata interna del proveedor sujeta a drift y aborto, según
+`../decisions/stage-04-scoped-cutover-rpo.md`. Sustituye el alcance literal de
+todos los escritores, sin sustituir el respaldo definitivo ni dar por ensayado
+el protocolo de mantenimiento. Ver `stage-04-cutover-maintenance.md`.
+
 Fecha: 17 de octubre de 2026. Complementa `stage-04-auth-cutover.md`.
 Estado actualizado el 18 de octubre: autorización remota condicional recibida,
 sin ejecución si faltan gates; ver `../decisions/stage-04-native-auth-risk-acceptance.md`

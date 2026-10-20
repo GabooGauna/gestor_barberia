@@ -1,5 +1,31 @@
 # Runbook de despliegue seguro — Etapa 4
 
+Checkpoint vigente del 19 de octubre: recuperadas las tres asignaciones
+históricas y aplicada expand Auth, tras respaldo definitivo cifrado y restore
+aislado supervisados (`2abb1ac7f0d7611a54ab8b1ced9d7afe`). Conciliación de las
+seis tablas PASS; signup/email y grants permanecen cerrados. No repetir expand
+ni restaurar flags legacy. Se aplicó por SQL explícito, sin modificar el ledger
+CLI. Próximo paso: provisión/bootstrap revisados del administrador existente,
+vínculos, cutover y suplemento; todavía no se ejecutaron. Color sigue separado.
+Detalles y hashes en `../reviews/stage-04-controlled-cutover-checkpoint.md`.
+La decisión vigente acepta riesgo residual sin exigir RPO 0 absoluto ni soporte
+del proveedor; las referencias históricas siguientes no reabren ese gate.
+
+Reanudación vigente: acceso Management API resuelto con PAT protegido; proyecto
+verificado por ref, origen informado `https://gestor-barberia-five.vercel.app`.
+Configuración Auth original cifrada y recuperación local/hash comprobados.
+Inventario corregido del mismo respaldo confirma metadata DATABASE/ACL/settings
+presente; el listado default anterior la ocultaba. No usar reconstrucción
+suplementaria. Restore de esa metadata y arranque Auth vacío del clon PASS,
+incluidos login/refresh/reinicio sintéticos y UUID/FK conservados. Sigue cerrado
+el gate de mantenimiento y respaldo definitivo. El propietario aceptó preparar
+y ensayar RPO 0 para negocio/runtime Auth con drift/aborto sobre metadata interna,
+según `../decisions/stage-04-scoped-cutover-rpo.md`. Esta decisión sustituye las
+referencias a suspensión literal de todo el proveedor en este runbook; todavía
+requiere implementación y validación de `stage-04-cutover-maintenance.md`.
+Evidencia actual: `../reviews/stage-04-supabase-resume.md`. Estos avances no
+sustituyen el respaldo definitivo con escritores suspendidos ni abren producción.
+
 Checkpoint operativo vigente del 18 de octubre: reutilizar el respaldo cifrado
 `ab70bce0fa53469f8f8659c4564970ba`; TLS, recuperación local de clave y autenticación
 del archivo ya verificadas. Restore PostgreSQL aislado y comparación de conteos,
@@ -155,7 +181,17 @@ autorizados; nunca se resuelve el vínculo por nombre visible.
 ## Cutover
 
 1. Mantener el frontend en mantenimiento.
-2. Repetir backup y preflight.
+2. Revalidar el respaldo definitivo `2abb1ac7f0d7611a54ab8b1ced9d7afe`, sus
+   hashes/accesibilidad y las seis tablas legadas invariantes, junto con los
+   journals y credenciales de reprovisión. No repetir la captura/restauración
+   aprobada sólo por vínculos trazados y sesiones de smoke ya cerradas, sin uso
+   de negocio ni factores MFA. El respaldo recupera el baseline preexpand:
+   cualquier restauración debe permanecer aislada/contenida, reaplicar el
+   cierre/seguridad y reprovisionar los vínculos; nunca reabrir grants/PIN legacy.
+   No recupera exactamente los UUID Auth o sesiones posteriores. Si aparece
+   estado de negocio nuevo, factores MFA u otro delta no regenerable, evaluar
+   su recuperación concreta antes de continuar. Decisión y límites del Reviewer
+   en `../reviews/stage-04-resume-supabase-review.md`.
 3. Aplicar la migración cutover. Cualquier precondición inválida aborta toda la
    transacción; no corregir filas automáticamente.
 4. Verificar que la versión predesplegada de `admin-users` conserva JWT

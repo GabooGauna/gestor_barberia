@@ -9,11 +9,22 @@ in-memory roles stream; all remaining roles SQL and database objects are intact.
 param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[0-9a-f]{32}$')]
-    [string] $BackupId
+    [string] $BackupId,
+    [switch] $VerifyDatabaseMetadata,
+    [switch] $InspectDatabaseMetadata,
+    [switch] $VerifyRestoredAuth,
+    [ValidatePattern('^[0-9a-f]{64}$')]
+    [string] $DatabaseMetadataObservationSha256,
+    [ValidatePattern('^[0-9a-f]{32}$')]
+    [string] $SupervisionRunId
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-if ($args.Count -ne 0) { throw 'Only the explicit BackupId is accepted.' }
+$argumentVariable = Get-Variable -Name args -Scope Local -ErrorAction SilentlyContinue
+if ($null -ne $argumentVariable -and @($argumentVariable.Value).Count -gt 0) { throw 'Unexpected positional arguments are not accepted.' }
+if ($VerifyDatabaseMetadata -and $InspectDatabaseMetadata) { throw 'Choose either metadata inspection or metadata replay.' }
+if ($DatabaseMetadataObservationSha256 -and -not $VerifyDatabaseMetadata) { throw 'Observation comparison requires metadata replay.' }
+if ($VerifyRestoredAuth -and (-not $VerifyDatabaseMetadata -or -not $DatabaseMetadataObservationSha256)) { throw 'The Auth probe requires metadata replay and its source observation comparison.' }
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Windows current-user DPAPI is required.' }
 
 # Import definitions only, never the execution bodies of capture/intake.
@@ -49,6 +60,119 @@ function Get-LocalBootstrapRoleReplay {
         OriginalSha256 = Get-BytesSha256 $InputBytes
         ExecutedSha256 = Get-BytesSha256 $replayBytes
     }
+}
+
+function Get-DatabaseMetadataInventory {
+    param([Parameter(Mandatory = $true)][string] $Toc)
+    $counts = @{ Database = 0; Properties = 0; Acl = 0; UnexpectedIdentity = 0 }
+    foreach ($line in ($Toc -split '\r?\n')) {
+        if ($line -cmatch '^\d+;\s+\d+\s+\d+\s+DATABASE - ') { $counts.Database++ }
+        if ($line -cmatch '^\d+;\s+\d+\s+\d+\s+DATABASE PROPERTIES - ') { $counts.Properties++ }
+        if ($line -cmatch '^\d+;\s+\d+\s+\d+\s+ACL - DATABASE ') { $counts.Acl++ }
+        if ($line -cmatch '^\d+;\s+\d+\s+\d+\s+(?:DATABASE(?: PROPERTIES)? - |(?:ACL|COMMENT|SECURITY LABEL) - DATABASE )' -and
+            $line -cnotmatch '^\d+;\s+\d+\s+\d+\s+(?:DATABASE(?: PROPERTIES)? - postgres postgres|(?:ACL|COMMENT|SECURITY LABEL) - DATABASE postgres postgres)\s*$') {
+            $counts.UnexpectedIdentity++
+        }
+    }
+    $cause = 'metadata_replay_candidate'
+    if ($counts.UnexpectedIdentity -gt 0) { $cause = 'unexpected_database_metadata_identity' }
+    elseif ($counts.Database -eq 0) { $cause = 'missing_database_entry' }
+    elseif ($counts.Database -gt 1) { $cause = 'duplicate_database_entry' }
+    return [PSCustomObject] @{
+        Cause = $cause; DatabaseEntryCount = $counts.Database
+        PropertiesEntryCount = $counts.Properties; AclEntryCount = $counts.Acl
+        UnexpectedIdentityEntryCount = $counts.UnexpectedIdentity
+        ReadyForMetadataReplay = ($cause -ceq 'metadata_replay_candidate')
+    }
+}
+
+function Get-DatabaseMetadataReplay {
+    param([Parameter(Mandatory = $true)][string] $Toc)
+    # This is an explicit metadata-only pass, followed by the unchanged FULL
+    # database replay. Never infer success from an absent DATABASE entry.
+    $selected = New-Object 'Collections.Generic.List[string]'
+    $inventory = Get-DatabaseMetadataInventory -Toc $Toc
+    if (-not $inventory.ReadyForMetadataReplay) {
+        $exception = New-Object InvalidOperationException 'Archived DATABASE metadata requires review.'
+        $exception.Data['Stage04MetadataDiagnostic'] = 'cause=' + $inventory.Cause + ';database_entries=' + $inventory.DatabaseEntryCount + ';properties_entries=' + $inventory.PropertiesEntryCount + ';acl_entries=' + $inventory.AclEntryCount + ';unexpected_identity_entries=' + $inventory.UnexpectedIdentityEntryCount
+        throw $exception
+    }
+    $databaseEntries = 0
+    foreach ($line in ($Toc -split '\r?\n')) {
+        if ($line -cmatch '^\d+;\s+\d+\s+\d+\s+DATABASE - postgres postgres\s*$') {
+            $databaseEntries++
+            $selected.Add($line)
+        } elseif ($line -cmatch '^\d+;\s+\d+\s+\d+\s+(?:DATABASE PROPERTIES - postgres postgres|(?:ACL|COMMENT|SECURITY LABEL) - DATABASE postgres postgres)\s*$') {
+            $selected.Add($line)
+        } elseif ($line -cmatch '^\d+;\s+\d+\s+\d+\s+(?:DATABASE(?: PROPERTIES)? - |(?:ACL|COMMENT|SECURITY LABEL) - DATABASE )') {
+            throw 'Unexpected DATABASE metadata identity requires review.'
+        }
+    }
+    if ($databaseEntries -ne 1) { throw 'Exactly one archived postgres DATABASE entry is required for this opt-in pass.' }
+    $bytes = [Text.Encoding]::UTF8.GetBytes(($selected -join "`n") + "`n")
+    return [PSCustomObject] @{ Bytes = $bytes; EntryCount = $selected.Count; Sha256 = Get-BytesSha256 $bytes }
+}
+
+function Get-DatabaseMetadataCatalogSql {
+    # Safe source/clone comparison contract. No setting values, SQL, passwords,
+    # role configuration values or application rows leave the server.
+    return @'
+begin transaction read only;
+set local search_path=pg_catalog;
+with d as (select * from pg_database where datname=current_database()), a as (
+ select pg_get_userbyid(x.grantor) as grantor,
+ case when x.grantee=0 then 'PUBLIC' else pg_get_userbyid(x.grantee) end as grantee,
+ x.privilege_type,x.is_grantable
+ from d cross join lateral aclexplode(coalesce(d.datacl,acldefault('d',d.datdba))) x
+), s as (
+ select case when r.setrole=0 then '*all_roles*' else pg_get_userbyid(r.setrole) end as role_name,
+ v.setting,split_part(v.setting,'=',1) as setting_name
+ from pg_db_role_setting r join d on d.oid=r.setdatabase
+ cross join lateral unnest(r.setconfig) v(setting)
+)
+select json_build_object(
+ 'name',d.datname,'owner',pg_get_userbyid(d.datdba),'encoding',pg_encoding_to_char(d.encoding),
+ 'locale_provider',d.datlocprovider,'collate',d.datcollate,'ctype',d.datctype,
+ 'locale',d.datlocale,'icu_rules',d.daticurules,'collation_version',d.datcollversion,
+ 'actual_collation_version',pg_database_collation_actual_version(d.oid),
+ 'tablespace',(select spcname from pg_tablespace where oid=d.dattablespace),
+ 'connection_limit',d.datconnlimit,'allow_connections',d.datallowconn,
+ 'acl_entry_count',(select count(*) from a),
+ 'acl_sha256',(select encode(sha256(convert_to(coalesce(string_agg(jsonb_build_array(grantor,grantee,privilege_type,is_grantable)::text,chr(10) order by grantor collate "C",grantee collate "C",privilege_type collate "C",is_grantable),''),'UTF8')),'hex') from a),
+ 'setting_entry_count',(select count(*) from s),
+ 'setting_names',(select coalesce(json_agg(setting_name order by role_name collate "C",setting_name collate "C"),'[]'::json) from s),
+ 'settings_sha256',(select encode(sha256(convert_to(coalesce(string_agg(jsonb_build_array(role_name,setting)::text,chr(10) order by role_name collate "C",setting collate "C"),''),'UTF8')),'hex') from s),
+ 'settings_values_exposed',false
+) from d;
+rollback;
+'@
+}
+
+function ConvertFrom-MetadataObservationJson {
+    param([Parameter(Mandatory = $true)][string] $Json)
+    # PS 7.5+ otherwise converts ISO timestamps to DateTime; PS 5.1 preserves
+    # strings. Preserve the observation contract identically on both runtimes.
+    if ((Get-Command ConvertFrom-Json).Parameters.ContainsKey('DateKind')) {
+        return ($Json | ConvertFrom-Json -DateKind String)
+    }
+    return ($Json | ConvertFrom-Json)
+}
+
+function Test-MetadataObservationTimestamp {
+    param($Value)
+    if ($Value -isnot [string] -or $Value -cnotmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$') { return $false }
+    $parsed=[DateTimeOffset]::MinValue
+    return [DateTimeOffset]::TryParseExact($Value,[string[]]@("yyyy-MM-dd'T'HH:mm:ss'Z'","yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'"),
+        [Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::AssumeUniversal,[ref]$parsed)
+}
+
+function Assert-DatabaseMetadataEquality {
+    param([Parameter(Mandatory = $true)] $Expected, [Parameter(Mandatory = $true)] $Actual)
+    foreach ($field in @('name','owner','encoding','locale_provider','collate','ctype','locale','icu_rules','collation_version','actual_collation_version',
+        'tablespace','connection_limit','allow_connections','acl_entry_count','acl_sha256','setting_entry_count','settings_sha256','settings_values_exposed')) {
+        if (($null -eq $Expected.$field) -ne ($null -eq $Actual.$field) -or [string]$Expected.$field -cne [string]$Actual.$field) { throw 'Restored DATABASE metadata differs from the observed supplement.' }
+    }
+    if ((@($Expected.setting_names) -join '|') -cne (@($Actual.setting_names) -join '|')) { throw 'Restored DATABASE setting names differ from the observed supplement.' }
 }
 
 function Get-SafeRoleStatementKind {
@@ -165,8 +289,9 @@ function Invoke-IsolatedDocker {
     }
 }
 
-$key = $null; $databaseBytes = $null; $roleBytes = $null; $roleReplayBytes = $null
+$key = $null; $databaseBytes = $null; $roleBytes = $null; $roleReplayBytes = $null; $databaseMetadataBytes = $null; $observationBytes = $null; $authProbeBytes = $null
 $containerName = $null; $containerMayExist = $false
+$authContainerName = $null; $authContainerMayExist = $false
 $dockerExecutable = $null; $dockerEndpoint = $null
 $failure = $null; $stage = 'validate_local_artifacts'; $reportPath = $null
 try {
@@ -182,12 +307,29 @@ try {
     $manifestPath = [IO.Path]::Combine($backupDirectory, 'manifest.json')
     $databasePath = [IO.Path]::Combine($backupDirectory, 'database.gbbk')
     $rolePath = [IO.Path]::Combine($backupDirectory, 'roles.gbbk')
+    $observation = $null
+    if ($DatabaseMetadataObservationSha256) {
+        $stage = 'validate_metadata_observation_for_comparison'
+        $observationPath = [IO.Path]::Combine($backupDirectory, 'source-database-metadata.json')
+        Assert-NoReparsePath $observationPath
+        Assert-PrivateAcl -LiteralPath $observationPath -OwnerSid $ownerSid
+        if ((Get-Item -LiteralPath $observationPath).Length -gt 65536) { throw 'Oversized metadata observation rejected.' }
+        $observationBytes = [IO.File]::ReadAllBytes($observationPath)
+        if ((Get-BytesSha256 $observationBytes) -cne $DatabaseMetadataObservationSha256) { throw 'Metadata observation SHA256 does not match.' }
+        $observation = ConvertFrom-MetadataObservationJson -Json ([Text.UTF8Encoding]::new($false,$true).GetString($observationBytes))
+        if ($observation.format_version -ne 1 -or $observation.backup_id -cne $BackupId -or $observation.project_ref -cne 'ucmwykzrepmjucssjnum' -or
+            $observation.same_snapshot_as_database -isnot [bool] -or $observation.same_snapshot_as_database -or
+            -not (Test-MetadataObservationTimestamp $observation.observed_at_utc)) { throw 'Metadata observation identity/snapshot contract differs.' }
+    }
     foreach ($path in @($application, $backupRoot, $backupDirectory, $secretDirectory, $keyPath, $manifestPath, $databasePath, $rolePath)) {
         Assert-NoReparsePath $path
         Assert-PrivateAcl -LiteralPath $path -OwnerSid $ownerSid
     }
     if ((Get-Item -LiteralPath $manifestPath).Length -gt 65536) { throw 'Oversized manifest rejected.' }
-    $manifest = [IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json
+    if ($SupervisionRunId) {
+        $supervisedManifestBytes=[IO.File]::ReadAllBytes($manifestPath)
+        $manifest=[Text.UTF8Encoding]::new($false,$true).GetString($supervisedManifestBytes) | ConvertFrom-Json
+    } else { $manifest = [IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json }
     $captureClientImage = 'postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24'
     $image = 'public.ecr.aws/supabase/postgres:17.11.0.004@sha256:06ddc7962e11ab0f4f0334fd05671e97c30ea202f6e6a7113800bd3d6e416108'
     if ($manifest.FormatVersion -ne 1 -or $manifest.BackupId -cne $BackupId -or
@@ -221,13 +363,20 @@ try {
     $stage = 'verify_local_docker_and_archive_dependencies'
     $dockerExecutable = (Get-Command docker -CommandType Application | Select-Object -First 1).Source
     $dockerEndpoint = Get-VerifiedLocalDockerEndpoint -Executable $dockerExecutable
-    $drillId = [Guid]::NewGuid().ToString('N')
+    $drillId = if ($SupervisionRunId) { $SupervisionRunId } else { [Guid]::NewGuid().ToString('N') }
     $containerName = 'stage04-isolated-restore-' + $drillId
+    $authContainerName = 'stage04-auth-restored-' + $drillId
     $localOwner = 'supabase_admin'
     # Root verified this digest's postgres uid=100/gid=101. Bypass platform
     # seeding but preserve the confirmed source bootstrap name/OID 10. Only
     # fixed shell text and this fixed non-secret role enter the shell.
     $bootstrap = 'set -eu; initdb -D /var/lib/postgresql/data --username="$1" --auth-local=trust --auth-host=reject --no-locale; exec postgres -D /var/lib/postgresql/data -c shared_preload_libraries= -c listen_addresses= -c unix_socket_directories=/var/run/postgresql -c logging_collector=off -c log_statement=none -c log_min_error_statement=panic -c log_min_messages=panic'
+    if ($VerifyRestoredAuth) {
+        # Both containers share this network-none namespace. No host ports or
+        # external connectivity are added. Reject every host rule except this
+        # exact loopback/database/Auth-role SCRAM rule; no real password is used.
+        $bootstrap = 'set -eu; initdb -D /var/lib/postgresql/data --username="$1" --auth-local=trust --auth-host=reject --no-locale; { printf "%s\n" "host postgres supabase_auth_admin 127.0.0.1/32 scram-sha-256"; cat /var/lib/postgresql/data/pg_hba.conf; } > /var/lib/postgresql/data/pg_hba.auth-probe; mv /var/lib/postgresql/data/pg_hba.auth-probe /var/lib/postgresql/data/pg_hba.conf; exec postgres -D /var/lib/postgresql/data -c shared_preload_libraries= -c listen_addresses=127.0.0.1 -c unix_socket_directories=/var/run/postgresql -c logging_collector=off -c log_statement=none -c log_min_error_statement=panic -c log_min_messages=panic'
+    }
     $containerMayExist = $true
     $null = Invoke-IsolatedDocker -Arguments @('run', '--detach', '--rm', '--log-driver', 'none', '--name', $containerName,
         '--network', 'none', '--read-only', '--user', 'postgres', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
@@ -252,7 +401,26 @@ try {
         Start-Sleep -Seconds 1
     }
     if (-not $ready) { throw 'Disposable PostgreSQL did not become ready.' }
-    $toc = (Invoke-IsolatedDocker -Arguments @('exec', '-i', '--user', 'postgres', $containerName, 'pg_restore', '--list') -InputBytes $databaseBytes).Text
+    $tocArguments = @('exec', '-i', '--user', 'postgres', $containerName, 'pg_restore', '--list')
+    # pg_restore --list itself filters DATABASE/PROPERTIES/ACL unless --create
+    # is selected. Missing entries in its default listing prove no absence.
+    if ($VerifyDatabaseMetadata -or $InspectDatabaseMetadata) { $tocArguments += '--create' }
+    $toc = (Invoke-IsolatedDocker -Arguments $tocArguments -InputBytes $databaseBytes).Text
+    if ($InspectDatabaseMetadata) {
+        $stage = 'inspect_archived_database_metadata_only'
+        $inventory = Get-DatabaseMetadataInventory -Toc $toc
+        $report = [PSCustomObject] @{
+            BackupId = $BackupId; DrillId = $drillId; ProjectRef = 'ucmwykzrepmjucssjnum'
+            TimestampUtc = [DateTime]::UtcNow.ToString('o'); Phase = 'archive_database_metadata_inventory_only'
+            CiphertextHashesVerified = $true; GcmAuthenticated = $true; PlainHashesVerified = $true
+            DatabaseMetadataInventory = $inventory
+            RolesSqlExecuted = $false; DatabaseArchiveSqlExecuted = $false
+            DatabasePropertiesOwnerAclSettingsVerified = $false; SupabaseAuthRecoveryVerified = $false
+            FullSupabaseRecoveryVerified = $false; RpoZeroVerified = $false
+            Limitation = 'TOC metadata counts only; does not restore or verify DATABASE properties, roles, data or Auth.'
+        }
+        $reportPath = [IO.Path]::Combine($backupDirectory, 'isolated-metadata-inspection-' + $drillId + '.json')
+    } else {
     $requiredExtensions = @([regex]::Matches($toc, '(?m)^\d+;\s+\d+\s+\d+\s+EXTENSION\s+-\s+([a-zA-Z0-9_-]+)\s*$') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
     $psql = @('exec', '-i', '--user', 'postgres', $containerName, 'psql', '-X', '--no-password', '--quiet', '--tuples-only', '--no-align', '--set', 'ON_ERROR_STOP=1', '--set', 'VERBOSITY=sqlstate', '--host', '/var/run/postgresql', '--username', $localOwner, '--dbname', 'postgres')
     $availableJson = (Invoke-IsolatedDocker -Arguments $psql -InputBytes ([Text.Encoding]::UTF8.GetBytes('select coalesce(json_agg(json_build_object(''name'',name,''version'',default_version)), ''[]''::json) from pg_available_extensions;'))).Text
@@ -284,6 +452,26 @@ try {
     # Explicit local adaptation, not an unfiltered replay: exactly one already
     # satisfied CREATE is blanked. All ALTER/configuration/membership grants run.
     $null = Invoke-IsolatedDocker -Arguments ($psql + @('--single-transaction', '--file=-')) -InputBytes $roleReplayBytes -Operation 'roles_restore'
+    $databaseMetadataReplay = $null
+    if ($VerifyDatabaseMetadata) {
+        $null = Invoke-IsolatedDocker -Arguments $psql -InputBytes ([Text.Encoding]::UTF8.GetBytes('CREATE DATABASE stage04_restore_control TEMPLATE template0;'))
+        $stage = 'validate_archived_database_metadata'
+        $databaseMetadataReplay = Get-DatabaseMetadataReplay -Toc $toc
+        $databaseMetadataBytes = $databaseMetadataReplay.Bytes
+        # The TOC list contains metadata identifiers only, lives in the existing
+        # container tmpfs and is deleted with that exact disposable container.
+        # No archive SQL or application data is written to this list.
+        $null = Invoke-IsolatedDocker -Arguments @('exec', '-i', '--user', 'postgres', $containerName,
+            'sh', '-c', 'umask 077; cat > /tmp/stage04-database-metadata.list') -InputBytes $databaseMetadataBytes
+        $stage = 'restore_database_metadata_outside_transaction'
+        # CREATE DATABASE cannot run inside the full replay transaction. Only
+        # the disposable postgres database is recreated, from the archive's own
+        # DATABASE command. This pass never connects to a remote server.
+        $null = Invoke-IsolatedDocker -Arguments @('exec', '-i', '--user', 'postgres', $containerName, 'pg_restore',
+            '--no-password', '--host', '/var/run/postgresql', '--username', $localOwner,
+            '--dbname', 'stage04_restore_control', '--create', '--clean', '--if-exists', '--exit-on-error',
+            '--use-list', '/tmp/stage04-database-metadata.list') -InputBytes $databaseBytes -Operation 'database_restore'
+    }
     $stage = 'restore_full_database_single_transaction'
     $null = Invoke-IsolatedDocker -Arguments @('exec', '-i', '--user', 'postgres', $containerName, 'pg_restore',
         '--no-password', '--host', '/var/run/postgresql', '--username', $localOwner, '--dbname', 'postgres',
@@ -342,6 +530,27 @@ select json_build_object(
 rollback;
 '@
     $roleIntegrity = (Invoke-IsolatedDocker -Arguments $psql -InputBytes ([Text.Encoding]::UTF8.GetBytes($roleIntegritySql)) -Operation 'catalog_read').Text.Trim() | ConvertFrom-Json
+    $databaseMetadata = $null
+    if ($VerifyDatabaseMetadata) {
+        $stage = 'observe_restored_database_metadata'
+        $databaseMetadata = (Invoke-IsolatedDocker -Arguments $psql -InputBytes ([Text.Encoding]::UTF8.GetBytes((Get-DatabaseMetadataCatalogSql))) -Operation 'catalog_read').Text.Trim() | ConvertFrom-Json
+        if ($null -ne $observation) { Assert-DatabaseMetadataEquality -Expected $observation.database_metadata -Actual $databaseMetadata }
+    }
+    $authProbe = $null
+    if ($VerifyRestoredAuth) {
+        $stage = 'restored_empty_auth_baseline_probe'
+        $authContainerMayExist = $true
+        $probeInput = [Text.Encoding]::UTF8.GetBytes(([PSCustomObject]@{
+            dbContainer=$containerName; dbSuperuser=$localOwner; prerequisitesVerified=$true
+        } | ConvertTo-Json -Compress))
+        try {
+            $authProbeBytes = Invoke-BinaryProcess -Executable $node -Arguments @((Join-Path $PSScriptRoot 'stage04-auth-restore-probe.mjs')) -Payload $probeInput -MaximumBytes 65536
+        } finally { [Array]::Clear($probeInput,0,$probeInput.Length) }
+        $authProbe = [Text.UTF8Encoding]::new($false,$true).GetString($authProbeBytes) | ConvertFrom-Json
+        if ($authProbe.authRestoredBaselineProbe -ne $true -or $authProbe.schemaMigrationsUnchanged -ne $true -or
+            $authProbe.emptyRuntimeBaselineVerified -ne $true -or $authProbe.syntheticAdminCreateLoginRefreshRestartVerified -ne $true -or
+            $authProbe.businessUuidFkUnchanged -ne $true -or $authProbe.exactAuthContainerCleanupVerified -ne $true) { throw 'Auth helper returned an incomplete baseline probe.' }
+    }
     $report = [PSCustomObject] @{
         BackupId = $BackupId; DrillId = $drillId; ProjectRef = 'ucmwykzrepmjucssjnum'
         TimestampUtc = [DateTime]::UtcNow.ToString('o'); Image = $image
@@ -355,13 +564,26 @@ rollback;
         Catalog = $catalog; Network = 'none'; DataStorage = 'tmpfs'; LogDriver = 'none'; ContainerSwapDisabled = $true
         HostPagingExcluded = $false
         SourceCatalogComparisonVerified = $false; UuidRowReconciliationVerified = $false
-        DatabasePropertiesOwnerAclSettingsVerified = $false
+        DatabasePropertiesOwnerAclSettingsVerified = ($VerifyDatabaseMetadata -and $null -ne $observation)
+        DatabaseMetadataPassRequested = [bool] $VerifyDatabaseMetadata
+        DatabaseMetadataArchiveReplayExitZero = [bool] $VerifyDatabaseMetadata
+        DatabaseMetadata = $databaseMetadata
+        DatabaseMetadataSourceComparisonVerified = ($null -ne $observation)
+        DatabaseMetadataReconstructedFromSupplement = $false
+        DatabaseMetadataObservationSha256 = $DatabaseMetadataObservationSha256
+        DatabaseMetadataObservationAtUtc = $(if ($null -eq $observation) { $null } else { $observation.observed_at_utc })
+        DatabaseMetadataRecoveredFromOriginalArchive = [bool] $VerifyDatabaseMetadata
+        DatabaseMetadataAsOfBackupCaptureVerified = $false
+        DatabaseMetadataSelectedTocEntryCount = $(if ($null -eq $databaseMetadataReplay) { 0 } else { $databaseMetadataReplay.EntryCount })
+        DatabaseMetadataSelectedTocSha256 = $(if ($null -eq $databaseMetadataReplay) { $null } else { $databaseMetadataReplay.Sha256 })
+        RestoredEmptyAuthBaselineProbe = $authProbe
         SupabaseAuthRecoveryVerified = $false; FullSupabaseRecoveryVerified = $false
         RpoZeroVerified = $false; RtoIntegralVerified = $false; PortableKeyCustodyVerified = $false
-        Limitation = 'PostgreSQL schema/data restore only. DATABASE properties/owner/ACL/settings require a separate reviewed verification/restore procedure; do not add --create to a single-transaction restore blindly. Requires source UUID/count/FK/ACL comparison and full provider/Auth/config/key/Storage recovery evidence.'
+        Limitation = 'DATABASE metadata, when opted in, is restored from the original archive; its comparison is against a separately timestamped observation. Auth probe, when opted in, covers only the empty baseline with new local keys and a synthetic account. No original-token continuity, full Supabase recovery, integral RTO or RPO0 claim. Business source comparison remains separate.'
     }
     # Save a PASS report only after cleanup is confirmed in finally.
     $reportPath = [IO.Path]::Combine($backupDirectory, 'isolated-restore-' + $drillId + '.json')
+    }
 } catch {
     $failure = 'Isolated PostgreSQL restore stopped at ' + $stage + '. Database archive objects were not excluded; the roles recipe permits only the reviewed single bootstrap CREATE adaptation. No raw diagnostics were emitted.'
     if ($_.Exception.Data.Contains('Stage04SafeDiagnostic')) {
@@ -370,7 +592,23 @@ rollback;
             $failure += ' ' + $safeDiagnostic
         }
     }
+    if ($_.Exception.Data.Contains('Stage04MetadataDiagnostic')) {
+        $metadataDiagnostic = $_.Exception.Data['Stage04MetadataDiagnostic']
+        if ($metadataDiagnostic -is [string] -and $metadataDiagnostic -cmatch '^cause=(missing_database_entry|duplicate_database_entry|unexpected_database_metadata_identity);database_entries=[0-9]{1,7};properties_entries=[0-9]{1,7};acl_entries=[0-9]{1,7};unexpected_identity_entries=[0-9]{1,7}$') {
+            $failure += ' metadata_' + $metadataDiagnostic
+        }
+    }
 } finally {
+    if ($authContainerMayExist -and $null -ne $dockerExecutable -and $null -ne $dockerEndpoint) {
+        try {
+            $null = Invoke-IsolatedDocker -Arguments @('rm', '--force', $authContainerName) -AllowFailure $true
+            $authRemaining = Invoke-IsolatedDocker -Arguments @('container', 'ls', '--all', '--filter', ('name=^/' + $authContainerName + '$'), '--format', '{{.Names}}')
+            if (-not [string]::IsNullOrWhiteSpace($authRemaining.Text)) { throw 'The exact Auth container remains.' }
+        } catch {
+            $cleanupFailure = 'Auth probe cleanup could not be confirmed for ' + $authContainerName + '; no success report was written.'
+            if ($null -eq $failure) { $failure=$cleanupFailure } else { $failure+=' '+$cleanupFailure }
+        }
+    }
     if ($containerMayExist -and $null -ne $dockerExecutable -and $null -ne $dockerEndpoint) {
         try {
             $cleanup = Invoke-IsolatedDocker -Arguments @('rm', '--force', $containerName) -AllowFailure $true
@@ -381,14 +619,26 @@ rollback;
             if ($null -eq $failure) { $failure = $cleanupFailure } else { $failure += ' ' + $cleanupFailure }
         }
     }
-    foreach ($bytes in @($key, $databaseBytes, $roleBytes, $roleReplayBytes)) {
+    foreach ($bytes in @($key, $databaseBytes, $roleBytes, $roleReplayBytes, $databaseMetadataBytes, $observationBytes, $authProbeBytes)) {
         if ($null -ne $bytes) { [Array]::Clear($bytes, 0, $bytes.Length) }
     }
 }
 if ($null -ne $failure) { throw $failure }
 if ($null -eq $reportPath) { throw 'No validated local restore report is available.' }
 $report | Add-Member -NotePropertyName ContainerCleanupVerified -NotePropertyValue $true
+if ($SupervisionRunId) { $report | Add-Member -NotePropertyName SupervisionRunId -NotePropertyValue $SupervisionRunId }
+if ($SupervisionRunId) {
+    $report | Add-Member -NotePropertyName ManifestSha256 -NotePropertyValue (Get-BytesSha256 $supervisedManifestBytes)
+    $snapshotProperty=$manifest.PSObject.Properties['ExportedSnapshot']
+    $report | Add-Member -NotePropertyName ExportedSnapshot -NotePropertyValue $(if ($null -eq $snapshotProperty) { $null } else { $snapshotProperty.Value })
+    $report | Add-Member -NotePropertyName DatabaseCipherSha256 -NotePropertyValue $manifest.DatabaseCipherSha256
+    $report | Add-Member -NotePropertyName RolesCipherSha256 -NotePropertyValue $manifest.RolesCipherSha256
+}
 $reportBytes = [Text.Encoding]::UTF8.GetBytes(($report | ConvertTo-Json -Depth 8))
 Write-NewPrivateFile -LiteralPath $reportPath -Bytes $reportBytes -OwnerSid $ownerSid
-Write-Host 'Isolated PostgreSQL restore completed and its disposable container was removed. Full Supabase recovery remains unverified.'
+if ($InspectDatabaseMetadata) {
+    Write-Host 'Archive metadata inventory completed without replaying roles/database SQL; its disposable container was removed. Recovery remains unverified.'
+} else {
+    Write-Host 'Isolated PostgreSQL restore completed and its disposable container was removed. Full Supabase recovery remains unverified.'
+}
 Write-Host $reportPath

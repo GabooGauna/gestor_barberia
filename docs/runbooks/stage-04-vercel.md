@@ -1,7 +1,19 @@
 # Etapa 4 — Frontend en Vercel, backend en Supabase
 
-Decisión del propietario: 18 de octubre de 2026. Vercel es el destino elegido;
-todavía no hay proyecto vinculado, dominio verificado ni despliegue remoto.
+Checkpoint vigente del 20 de octubre: propietario confirmó integración existente
+y autorizó commits/push. Lectura GitHub confirmó `main`, origen
+`GabooGauna/gestor_barberia` y status Vercel success del commit remoto anterior,
+proyecto existente `gaboogaunas-projects/gestor-barberia`, dominio informado abajo.
+No crear otro proyecto ni exigir vinculación CLI. El commit de publicación
+habilita `git.deploymentEnabled=true`; se publica Auth con color OFF y el
+backend permanece en mantenimiento hasta aceptación real. La sección histórica
+de CLI no es un prerrequisito de esta integración existente.
+
+Decisión del propietario: 18 de octubre de 2026. Vercel es el destino elegido.
+Actualización: propietario confirmó las tres variables y dominio
+`https://gestor-barberia-five.vercel.app`; GET público devuelve 200/HTML.
+No equivale a inspección de valores/alcances ni a validar la versión Auth.
+Revisión exacta del artefacto y publicación por GitHub quedan pendientes.
 No cambia los gates de recuperación, configuración y mantenimiento del
 [cutover Auth](stage-04-auth-cutover.md). El respaldo preparatorio y su restore
 aprobados se conservan, sin repetirlos.
@@ -13,11 +25,9 @@ aprobados se conservan, sin repetirlos.
 package.json y lockfile. Sin backend, credenciales privilegiadas o migraciones
 en el proceso de build. Auth, PostgreSQL y `admin-users` continúan en Supabase.
 
-Git deployments desactivados mediante `git.deploymentEnabled=false` mientras
-dure este procedimiento. No impide despliegues manuales/CLI: el operador debe
-respetar los checkpoints. La configuración sólo protege una integración Git
-cuando está incluida en el commit remoto usado; los cambios actuales siguen
-locales y no se hizo push. No importar/publicar una revisión legacy por omisión.
+El commit de publicación habilita Git deployments mediante
+`git.deploymentEnabled=true` para la integración existente. El backend conserva
+el mantenimiento hasta verificar el frontend publicado y los permisos reales.
 
 `.vercelignore` excluye configuración local, env, credenciales, reportes,
 scripts operativos y código Supabase de cargas por CLI. `.gitignore` protege
@@ -45,28 +55,11 @@ datos reales. No habilitar previews de ramas ajenas contra el backend real.
 Cambios de variables necesitan un build/despliegue nuevo. Mantener colores OFF
 en el primer build Auth, incluso si existe una variable local distinta.
 
-## Paso manual mínimo: acceso y proyecto, sin publicar
+## Integración existente
 
-Vercel CLI no está instalada/vinculada en el checkpoint local. El propietario
-puede autenticarse por navegador desde PowerShell, sin compartir token:
-
-```powershell
-Set-Location 'C:\Users\gauna\OneDrive\Escritorio\Gestor Barberia\gestor-barberia'
-npx vercel login
-npx vercel project add gns-hair-studio
-npx vercel link --project gns-hair-studio
-```
-
-Aceptar instalación de la CLI oficial si npx lo solicita. Elegir la cuenta/equipo
-propios; si el proyecto ya existe en su cuenta, omitir add y vincular el
-existente. Si Vercel pide un plan de pago/contratación, detenerse para decidirlo.
-Para el uso operativo de la barbería verificar un plan que permita uso comercial:
-[Hobby se limita al uso personal no comercial](https://vercel.com/docs/plans/hobby).
-No se contrata ni cambia un plan automáticamente.
-Estos comandos de acceso/creación/vinculación no son un deploy; no ejecutar
-`vercel` sin subcomando, `deploy` o `--prod` en esta preparación. Si pregunta
-descargar env al vincular, omitirlo y cargar sólo las tres variables de la tabla
-en el panel. No es necesario conectar GitHub ni hacer push para desplegar por CLI.
+Publicar mediante push autorizado a `main` del repositorio existente.
+No crear otro proyecto ni exigir login o link CLI. La integración GitHub–Vercel
+ya fue comprobada mediante el status del commit remoto.
 
 Después: configurar preset Vite y Node 24.x en Settings si aún no coinciden;
 identificar en Settings → Domains el dominio de producción asignado. No asumir

@@ -1,5 +1,12 @@
 # Etapa 4 — Controles operativos candidatos
 
+Actualización posterior del 18 de octubre: propietario acepta preparar y ensayar
+RPO 0 para negocio/runtime Auth y detectar drift/abortar sobre metadata interna.
+`../decisions/stage-04-scoped-cutover-rpo.md` sustituye el requisito literal de
+congelar todos los escritores del proveedor en los apartados históricos debajo.
+No demuestra aún el procedimiento, respaldo definitivo ni RTO integral; seguir
+`stage-04-cutover-maintenance.md` y su revisión antes del corte real.
+
 Fecha original: 17 de octubre de 2026. Implementación local solicitada;
 autorización real condicional recibida el 18 de octubre, sin ejecución hasta
 verificar los gates de seguridad y recuperación. Complementa auth-cutover y
@@ -17,7 +24,9 @@ prerrequisitos. La autorización no es evidencia de backup, recuperación o drif
 
 Orden por ambiente autorizado: backup consistente/restauración ensayada → expand
 → bootstrap de admin/vínculos de UUID originales → conciliación → checkpoint
-backup → cutover → `20261017000000_security_operations.sql` → nueva Edge y
+de respaldo (revalidación controlada del definitivo según auth-cutover, sin
+recaptura por vínculos trazados ni sesiones de smoke cerradas; no estado MFA o
+negocio nuevo) → cutover → `20261017000000_security_operations.sql` → nueva Edge y
 cliente MFA verificados → enrolamiento AAL2 → abrir gate → aceptación.
 La nueva Edge puede predesplegarse sin uso: falla cerrada si falta el suplemento.
 No ejecutar todas las migraciones pendientes: color sigue separado y OFF.

@@ -10,6 +10,96 @@
 
 ## Estado local de Etapa 4
 
+Checkpoint vigente del 20 de octubre: ambos perfiles existentes vinculados y
+logins reales verificados. Cutover RLS y suplemento operativo aplicados
+atómicamente, RLS FORCE en seis tablas, anon sin grants de negocio y PIN retirado.
+Edge admin-users ACTIVE/verify_jwt=true/origen exacto verificados; pruebas reales
+de mantenimiento/anon/AAL1 pasan para ambos usuarios. Se conservan seis tablas,
+UUID e históricos, incluidas tres asignaciones recuperadas. MFA del propietario
+confirmado por servidor: un factor TOTP verificado y una sesión AAL2.
+Corrección QR/transporte SVG y clave manual sólo RAM aprobada: unit5, lint,
+build y E2E focal2 PASS. Mantenimiento true/in_flight0; aceptación de negocio
+y Edge con AAL2 aún pendiente. Se prepara publicación por la integración
+GitHub–Vercel existente, autorizados commits/push; color sigue independiente.
+La cronología siguiente no autoriza repetir operaciones ya completadas.
+
+Avance remoto posterior: administrador inicial `admin.gns` creado por Admin API
+y vinculado por bootstrap al perfil existente, sin cambiar UUID/históricos.
+Reconcile y lectura de integridad PASS. Configuración Auth de producción
+confirmada (signup OFF, email ON, origen Vercel exacto, mínimo 12). Smoke real
+login/identidad/refresh/logout de su sesión y rechazo de refresh revocado PASS.
+Todavía sin MFA/AAL2 aceptado, vínculo del empleado, cutover RLS, suplemento,
+Edge o frontend; negocio permanece cerrado. Color sigue pendiente independiente.
+
+Checkpoint remoto posterior: respaldo definitivo cifrado/restauración aislada
+supervisados PASS (`2abb1ac7f0d7611a54ab8b1ced9d7afe`), seis tablas conciliadas
+con el respaldo original y aplicada únicamente expand Auth
+`20261016010000_auth_profiles_expand.sql`. Catálogo exacto y lectura posterior
+PASS, UUID/históricos preservados; signup/email y grants de clientes cerrados.
+No reejecutar expand: se aplicó por SQL explícito, sin ledger CLI ni db push.
+Pendientes provisión/bootstrap/vínculos, cutover RLS, suplemento, Edge y frontend;
+color separado y todavía ausente. No restaurar flags legacy tras expand.
+
+Checkpoint posterior del 19 de octubre: recuperadas en origen exactamente las
+tres asignaciones históricas autorizadas mediante INSERT-only revisado y
+ensayado; COMMIT reconocido. Lectura posterior confirma UUID/FK originales y
+las otras cinco tablas sin cambios en conteos/huellas. Evidencia en
+`docs/reviews/stage-04-controlled-cutover-checkpoint.md`. Sigue pendiente el
+respaldo definitivo antes de expand; no hay migraciones Auth/color aplicadas
+en este checkpoint, ni despliegues o push.
+
+Decisión más reciente del 19 de octubre: propietario acepta corte controlado
+con riesgo residual y sin RPO 0 absoluto; no requiere consultar a Supabase ni
+probar drenaje exhaustivo interno. Se conservan los demás gates. Actividad
+observable sin writers/TX/waits externos, REST de negocio reciente cero, Auth26
+vacío. Apareció discrepancia concreta: empleado_rutinas 0 en origen frente a 3
+en respaldo verificado; propietario confirma que deben conservarse/recuperarse.
+Preparar reparación acotada INSERT-only con UUID/FK originales, antes del
+respaldo definitivo y de Auth. Sin escrituras remotas ejecutadas en ese checkpoint.
+El bloqueo de garantía absoluta del párrafo histórico siguiente queda retirado.
+
+Checkpoint 19 de octubre: runtime local, TLS, cancelación del restore real y
+evidencia estricta aprobados; GET Auth correlacionado PASS preservado. Los logs
+remotos sólo aportan finalizaciones (23 h: seis eventos/seis completions/cero
+starts), no prueba exhaustiva de drenaje. Corte detenido antes de escrituras:
+falta mecanismo soportado de terminación/quiescencia únicamente Auth o inventario
+inflight fiable. Alternativa mínima y consulta preparada al proveedor en
+`docs/runbooks/stage-04-cutover-maintenance.md`. Se conserva B, el respaldo
+preparatorio verificado y la autorización condicional; sin nuevas migraciones
+aplicadas, despliegues o push. No repetir pruebas aprobadas.
+
+Actualización vigente: nuevo PAT guardado por el propietario, GET de gestión de
+proyecto/Auth/backups ya exitosos; 403 resuelto. No repetir captura del token.
+Identificador remoto coincide; nombre interno `barberia-sop`, aplicación GNS.
+Configuración Auth original preservada en suplemento DPAPI verificado fuera
+del repo. Corrección del diagnóstico TOC: `pg_restore --list` oculta metadata
+DATABASE si no se agrega `--create`; los conteos 0 anteriores NO demuestran
+ausencia en el archivo. Fixture real confirma el filtro. Inventario real corregido
+PASS: DATABASE1/PROPERTIES1/ACL1, identidad inesperada0, hashes/GCM y cleanup PASS.
+No se necesita reconstrucción desde suplemento. Nuevo ensayo combinado PASS:
+metadata DATABASE original y comparación owner/ACL/settings/locale, arranque
+Auth restaurado vacío, cuenta sintética/login/refresh/reinicio y UUID/FK
+conservados; limpieza confirmada. No equivale a todo Supabase/RTO integral.
+Decisión posterior recibida: preparar y ensayar alternativa B, RPO 0 de negocio
+y runtime Auth con metadata administrada/plano de control sujetos a drift/aborto.
+Sustituye suspensión literal del proveedor; no certifica implementación ni abre
+producción. Decisión `docs/decisions/stage-04-scoped-cutover-rpo.md` y procedimiento
+en `docs/runbooks/stage-04-cutover-maintenance.md`.
+No se modificó producción. Detalle en `docs/reviews/stage-04-supabase-resume.md`.
+
+Reanudación posterior al commit local `10bc305`: propietario confirma variables
+Vercel y origen `https://gestor-barberia-five.vercel.app` (GET público 200).
+MCP de proyecto funciona; Management API devuelve 403 con mensaje explícito
+de privilegios insuficientes, sin distinguir aún rol de cuenta/scopes. Captura
+DPAPI de PAT preparada y revisada; intervención humana en
+`docs/runbooks/stage-04-management-access.md`. Auth v2.197.0 con 26 tablas runtime
+vacías; sólo schema_migrations tiene 82 filas. Vault/Storage sin contenido
+inventariado. Faltan SHARE privileges sólo en cuatro tablas internas identificadas,
+no en todas las runtime. No se ejecutaron locks. Nuevo ensayo de metadata DATABASE
+detenido en validación TOC; PASS SQL previo conservado, sin otro respaldo.
+Detalle vigente en `docs/reviews/stage-04-supabase-resume.md`.
+Sin cambios de producción, push ni publicación por esta reanudación.
+
 Última decisión del 18 de octubre: frontend React en Vercel y backend en
 Supabase. Configuración local preparada en `vercel.json` y `.env.example`;
 procedimiento en `docs/runbooks/stage-04-vercel.md`. Falta vincular proyecto
