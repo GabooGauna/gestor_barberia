@@ -69,15 +69,6 @@ function groupRecords(audits, urgentTasks, assignments, auditsAvailable = true) 
         inactive: cancelled, counted: auditsAvailable,
       });
     });
-    if (ids.length === 0) add(assignment, {
-      id: `assignment-${assignment.id}`,
-      description: "Esta rutina no tenía tareas al asignarse.",
-      routine: routine?.titulo || "Rutina asignada",
-      routineId: assignment.rutina_id,
-      color: routine?.color,
-      status: assignment.cancelada_en ? "Asignación cancelada" : "Sin tareas",
-      completed: false, inactive: Boolean(assignment.cancelada_en), counted: false,
-    });
   });
   // Older completions remain visible even without a dated assignment record.
   audits.filter((record) => !includedAudits.has(record.id)).forEach((record) => add(record, {
@@ -102,7 +93,10 @@ function groupRecords(audits, urgentTasks, assignments, auditsAvailable = true) 
     completed: !record.cancelada_en && record.completada,
     inactive: Boolean(record.cancelada_en),
   }));
-  return [...employees.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  // Keep inactive history in mixed details, but do not create empty work cards.
+  return [...employees.values()]
+    .filter((employee) => employee.tasks.some((task) => !task.inactive))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 }
 
 function taskGroups(tasks) {
@@ -278,7 +272,7 @@ export default function CalendarioAuditoria({ onAssign }) {
         {dayReady && dayResult.partial && <p role="alert">No se pudieron cargar todos los registros. Se muestran los disponibles. <button className="button button--secondary" onClick={() => setReload((value) => value + 1)}>Reintentar</button></p>}
         {!dayReady ? <p role="status">Cargando registros...</p> : dayResult.error ? (
           <p role="alert">No se pudieron cargar los registros. Revisá tu conexión y los permisos de acceso. <button className="button button--secondary" onClick={() => setReload((value) => value + 1)}>Reintentar</button></p>
-        ) : dayResult.employees.length === 0 ? <p className="audit-empty">{dayResult.partial ? "No hay registros disponibles en las fuentes que se pudieron consultar." : "No hay tareas asignadas ni cumplimiento registrado para esta fecha."}</p> : dayResult.employees.map((employee) => {
+        ) : dayResult.employees.length === 0 ? <p className="audit-empty">{dayResult.partial ? "No hay tareas vigentes ni cumplimientos válidos en las fuentes que se pudieron consultar." : "No hay tareas vigentes ni cumplimientos válidos para esta fecha."}</p> : dayResult.employees.map((employee) => {
           const completed = employee.tasks.filter((task) => task.completed).length;
           const active = employee.tasks.filter((task) => !task.inactive && task.counted !== false).length;
           const { routines, emergencies } = taskGroups(employee.tasks);

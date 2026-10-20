@@ -10,6 +10,12 @@
 
 ## Estado local de Etapa 4
 
+Corrección de Auditoría del 20 de octubre: las tarjetas requieren al menos una
+tarea vigente o un cumplimiento válido. Se omiten rutinas sin tareas y tarjetas
+con sólo registros anulados/cancelados; el historial se conserva en datos,
+indicadores y detalles mixtos. Sin cambios de Supabase. Alcance y evidencia en
+`docs/reviews/audit-empty-cards.md`; no cierra toda Etapa 5.
+
 Seguimiento visual del 20 de octubre: acciones de Equipo alineadas al selector
 de rol y logo móvil dentro del flujo para respetar el padding de la cabecera.
 Sólo CSS; evidencia local en `docs/reviews/control-sizing-mobile-nav.md`.

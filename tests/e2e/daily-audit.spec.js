@@ -33,6 +33,80 @@ function businessReads(mock, table) {
   return mock.requests.filter((request) => request.table === table && request.method === "GET");
 }
 
+for (const scenario of ["sin registros", "rutina vacía", "cumplimiento anulado", "asignación cancelada", "urgencia cancelada", "sólo registros inactivos combinados"]) {
+  test(`auditoría oculta integrantes con ${scenario} y conserva los datos`, async ({ page, supabaseMock }) => {
+    await page.clock.setFixedTime(new Date("2026-10-20T04:00:00Z"));
+    seedWork(supabaseMock);
+    const combined = scenario === "sólo registros inactivos combinados";
+    supabaseMock.setTable("asignaciones_diarias", scenario === "rutina vacía" || scenario === "asignación cancelada" || combined ? [{
+      id: "inactive-assignment", empleado_id: employee.id, rutina_id: routine.id, fecha: "2026-10-20",
+      tarea_ids: scenario === "rutina vacía" ? [] : [task.id], cancelada_en: scenario === "rutina vacía" ? null : "2026-10-20T04:00:00Z",
+    }] : []);
+    supabaseMock.setTable("auditoria_diaria", scenario === "cumplimiento anulado" || combined ? [{
+      id: "voided", empleado_id: employee.id, tarea_id: task.id, fecha: "2026-10-20", anulada_en: "2026-10-20T04:00:00Z",
+      empleados: employee, tareas_rutina: { ...task, rutinas: routine },
+    }] : []);
+    supabaseMock.setTable("tareas_urgentes", scenario === "urgencia cancelada" || combined ? [{
+      id: "cancelled", empleado_id: employee.id, fecha: "2026-10-20", descripcion: "Urgencia anulada",
+      completada: false, cancelada_en: "2026-10-20T04:00:00Z", empleados: employee,
+    }] : []);
+    const before = structuredClone([...supabaseMock.tables]);
+    await seedAuthSession(page, supabaseMock, admin);
+    await page.goto("/panel");
+    await page.getByRole("button", { name: /^Auditoría/ }).click();
+    await expect(page.getByText("No hay tareas vigentes ni cumplimientos válidos para esta fecha.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ana", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Ver detalle de tareas/ })).toHaveCount(0);
+    expect([...supabaseMock.tables]).toEqual(before);
+    expect(supabaseMock.mutations).toEqual([]);
+    expect(supabaseMock.rpcCalls.filter(({ rpc }) => rpc !== "get_current_employee_profile")).toEqual([]);
+  });
+}
+
+test("un cumplimiento válido sin pendientes conserva sólo la tarjeta de su integrante", async ({ page, supabaseMock }) => {
+  await page.clock.setFixedTime(new Date("2026-10-20T04:00:00Z"));
+  seedWork(supabaseMock);
+  supabaseMock.setTable("asignaciones_diarias", []);
+  supabaseMock.setTable("tareas_urgentes", []);
+  const audit = supabaseMock.tables.get("auditoria_diaria")[0];
+  audit.fecha = "2026-10-20";
+  supabaseMock.tables.get("auditoria_diaria").push({
+    ...structuredClone(audit), id: "voided-other-employee", empleado_id: "other-employee",
+    empleados: { id: "other-employee", nombre: "Integrante sin tareas" }, anulada_en: "2026-10-20T04:00:00Z",
+  });
+  await seedAuthSession(page, supabaseMock, admin);
+  await page.goto("/panel");
+  await page.getByRole("button", { name: /^Auditoría/ }).click();
+  await expect(page.getByRole("heading", { name: "Ana", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Integrante sin tareas", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Realizadas: 1 de 1", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /Ver detalle de tareas/ }).click();
+  await expect(page.getByText(task.descripcion, { exact: true })).toBeVisible();
+  await expect(page.getByText("Completado ✓", { exact: true })).toBeVisible();
+  expect(supabaseMock.mutations).toEqual([]);
+});
+
+for (const auditAvailable of [true, false]) {
+  test(`una tarea asignada sigue visible al anular su cumplimiento, lectura disponible ${auditAvailable}`, async ({ page, supabaseMock }) => {
+    await page.clock.setFixedTime(new Date("2026-10-20T04:00:00Z"));
+    seedWork(supabaseMock);
+    supabaseMock.tables.get("asignaciones_diarias")[0].fecha = "2026-10-20";
+    const audit = supabaseMock.tables.get("auditoria_diaria")[0];
+    audit.fecha = "2026-10-20";
+    audit.anulada_en = "2026-10-20T04:00:00Z";
+    supabaseMock.setTable("tareas_urgentes", []);
+    if (!auditAvailable) supabaseMock.failTable("auditoria_diaria");
+    await seedAuthSession(page, supabaseMock, admin);
+    await page.goto("/panel");
+    await page.getByRole("button", { name: /^Auditoría/ }).click();
+    await page.getByRole("button", { name: /Ver detalle de tareas/ }).click();
+    await expect(page.getByText(task.descripcion, { exact: true })).toBeVisible();
+    await expect(page.getByText(auditAvailable ? "Pendiente ⏳" : "Estado sin verificar", { exact: true })).toBeVisible();
+    await expect(page.getByText(auditAvailable ? "Realizadas: 0 de 1" : "Resumen parcial · Revisá los estados disponibles", { exact: true })).toBeVisible();
+    expect(supabaseMock.mutations).toEqual([]);
+  });
+}
+
 test("asignaciones del día comienzan vacías, guardan por fecha y se vacían mañana sin tocar el legado", async ({ page, supabaseMock }) => {
   await page.clock.setFixedTime(new Date("2026-10-20T04:00:00Z"));
   seedWork(supabaseMock);
@@ -87,8 +161,9 @@ test("una asignación pendiente real marca el calendario y desasignarla conserva
   expect(cancelled.tarea_ids).toEqual([task.id]);
   await page.getByRole("button", { name: /^Auditoría/ }).click();
   await expect(page.getByRole("button", { name: "20/10/2026, con asignaciones", exact: true }).getByTestId("audit-assignment-dot")).toBeVisible();
-  await page.getByRole("button", { name: /Ver detalle de tareas/ }).click();
-  await expect(page.getByText("Asignación cancelada", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ana", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Ver detalle de tareas/ })).toHaveCount(0);
+  await expect(page.getByText("No hay tareas vigentes ni cumplimientos válidos para esta fecha.", { exact: true })).toBeVisible();
   expect(supabaseMock.mutations).toEqual([]);
 });
 
@@ -194,7 +269,8 @@ for (const colorsEnabled of [false, true]) {
           { id: "second", descripcion: "Segunda tarea", orden: 2 },
           { id: "first", descripcion: "Primera tarea", orden: 1 },
         ] },
-        { id: "b", titulo: "Apertura", color: "sage", tareas_rutina: [] },
+        { id: "b", titulo: "Apertura", color: "sage", tareas_rutina: [{ id: "other", descripcion: "Otra apertura", orden: 1 }] },
+        { id: "empty", titulo: "Rutina vacía", tareas_rutina: [] },
       ];
       supabaseMock.setTable("rutinas", routines);
       supabaseMock.setTable("asignaciones_diarias", routines.map((item) => ({
@@ -211,7 +287,8 @@ for (const colorsEnabled of [false, true]) {
       await expect(groups.locator("h5")).toHaveText(["Apertura", "Apertura", "Cierre"]);
       await expect(groups.nth(0).locator(".audit-task > div > p:last-child")).toHaveText(["Primera tarea", "Segunda tarea", "Tercera tarea histórica"]);
       await expect(groups.nth(0)).toHaveClass(new RegExp(`routine-accent--${colorsEnabled ? "steel" : "copper"}`));
-      await expect(groups.nth(1)).toContainText("Esta rutina no tenía tareas al asignarse.");
+      await expect(groups.nth(1)).toContainText("Otra apertura");
+      await expect(page.getByRole("region", { name: "Rutina: Rutina vacía", exact: true })).toHaveCount(0);
       await expect(groups.nth(2)).toContainText("Asignación cancelada");
       await expect(groups.nth(0)).toContainText("Anulado");
       const emergencies = page.getByRole("region", { name: "Emergencias / tareas urgentes", exact: true });
@@ -308,7 +385,8 @@ test("sólo permite cancelar urgencias pendientes de hoy con confirmación acces
   await page.keyboard.press("Escape");
   await expect(modal).toBeVisible();
   await expect(modal).toHaveCount(0);
-  await expect(page.getByText("Cancelada", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ana", exact: true })).toHaveCount(0);
+  await expect(page.getByText("No hay tareas vigentes ni cumplimientos válidos para esta fecha.", { exact: true })).toBeVisible();
   await expect(cancel).toHaveCount(0);
   expect(nativeDialogs).toBe(0);
   await page.getByRole("button", { name: "19/10/2026, con asignaciones", exact: true }).click();

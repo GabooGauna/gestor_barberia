@@ -29,6 +29,15 @@ Reviewer independiente revisará después de las validaciones.
 
 ## Dependencias
 
+Corrección autorizada el 20 de octubre: ocultar tarjetas de integrantes sin
+tareas o con todos sus registros anulados/cancelados. Las rutinas vacías no
+generan tareas de presentación. Las tareas pendientes y los cumplimientos
+válidos siguen visibles; el detalle mixto conserva registros inactivos y los
+indicadores del calendario conservan su semántica histórica. Sin borrar datos
+ni cambiar Supabase. Esta solicitud actualiza la visibilidad definida en las
+intervenciones anteriores; incluye pruebas, commit/push y publicación en Vercel.
+Evidencia en `docs/reviews/audit-empty-cards.md`. No cierra toda Etapa 5.
+
 Seguimiento visual solicitado el 20 de octubre: compactar las acciones de
 Equipo mostradas en la captura y dejar padding efectivo alrededor del logo
 del nav móvil. Sólo CSS, con validación local; evidencia en
