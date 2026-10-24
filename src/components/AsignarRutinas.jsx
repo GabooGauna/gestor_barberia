@@ -21,7 +21,7 @@ export default function AsignarRutinas() {
       try {
         const [employees, routines] = await Promise.all([
           supabase.from("empleados").select("id,nombre,rol").eq("activo", true).order("nombre").abortSignal(controller.signal),
-          supabase.from("rutinas").select("id,titulo").is("archivada_en", null).order("titulo").abortSignal(controller.signal),
+          supabase.from("rutinas").select("id,titulo,orden").is("archivada_en", null).order("orden", { nullsFirst: false }).order("titulo").order("id").abortSignal(controller.signal),
         ]);
         if (employees.error || routines.error) throw new Error("catalog_unavailable");
         if (!controller.signal.aborted) setCatalog({ employees: employees.data || [], routines: routines.data || [], loading: false, error: false });

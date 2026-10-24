@@ -1,5 +1,13 @@
 # Pruebas locales de Etapa 4
 
+## Orden de plantillas (ampliación de Etapa 6)
+
+`node scripts/template-order-drill.mjs` prueba la cadena de permisos vigente,
+el SQL exacto de publicación, 26 comprobaciones de reordenamiento/persistencia,
+atomicidad y casos negativos en PostgreSQL Docker descartable sin red/puertos.
+Comprueba rollback de fixtures y migración y eliminación del contenedor. Nunca
+acepta destino remoto. Contrato: `docs/contracts/template-ordering.md`.
+
 ## Administradores con tareas propias (ampliación de Etapa 6)
 
 `node scripts/admin-own-tasks-drill.mjs` ejecuta

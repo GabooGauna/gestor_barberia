@@ -2,6 +2,14 @@
 
 ## Etapa 6 vigente — 20 de octubre de 2026
 
+Ampliación autorizada del 24 de octubre: reordenamiento de Plantillas por asa y
+teclado, con `rutinas.orden` nullable y `tareas_rutina.orden` existente; RPC
+atómica `reorder_template_items(uuid[],uuid)` con autorización administrativa
+vigente. Orden compartido en asignaciones, trabajo y auditoría; UUID, colores,
+históricos, cumplimiento y permisos conservados. Contrato en
+`docs/contracts/template-ordering.md`; validación y publicación en
+`docs/reviews/template-ordering.md` (consultar allí el estado operativo).
+
 Ampliación puntual solicitada: administradores trabajan desde su misma cuenta
 en «Mis tareas», conservando las secciones administrativas. Reutiliza
 `PanelEmpleado`, con progreso diario (rutinas y urgencias) para ambos roles;

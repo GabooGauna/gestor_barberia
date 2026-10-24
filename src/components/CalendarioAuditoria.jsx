@@ -62,6 +62,7 @@ function groupRecords(audits, urgentTasks, assignments, auditsAvailable = true) 
         routine: routine?.titulo || "Rutina asignada",
         routineId: assignment.rutina_id,
         color: routine?.color,
+        routineOrder: routine?.orden,
         order: task?.orden,
         section: task?.seccion,
         status: cancelled ? (completed ? "Asignación cancelada · Completado" : "Asignación cancelada") : !auditsAvailable ? "Estado sin verificar" : completed ? "Completado ✓" : "Pendiente ⏳",
@@ -77,6 +78,7 @@ function groupRecords(audits, urgentTasks, assignments, auditsAvailable = true) 
     routine: record.tareas_rutina?.rutinas?.titulo || "Rutina",
     routineId: record.tareas_rutina?.rutinas?.id,
     color: record.tareas_rutina?.rutinas?.color,
+    routineOrder: record.tareas_rutina?.rutinas?.orden,
     order: record.tareas_rutina?.orden,
     section: record.tareas_rutina?.seccion,
     status: record.anulada_en ? "Anulado" : "Completado ✓",
@@ -108,10 +110,10 @@ function taskGroups(tasks) {
       return;
     }
     const key = task.routineId || "unavailable";
-    if (!routines.has(key)) routines.set(key, { id: key, title: task.routine, color: task.color, tasks: [] });
+    if (!routines.has(key)) routines.set(key, { id: key, title: task.routine, color: task.color, order: task.routineOrder, tasks: [] });
     routines.get(key).tasks.push(task);
   });
-  const groups = [...routines.values()].sort((a, b) => a.title.localeCompare(b.title, "es") || a.id.localeCompare(b.id));
+  const groups = [...routines.values()].sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || a.title.localeCompare(b.title, "es") || a.id.localeCompare(b.id));
   groups.forEach((group) => group.tasks.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || a.description.localeCompare(b.description, "es") || a.id.localeCompare(b.id)));
   return { routines: groups, emergencies };
 }
@@ -159,13 +161,13 @@ export default function CalendarioAuditoria({ onAssign }) {
       try {
         const results = await Promise.allSettled([
           readPages(() => supabase.from("auditoria_diaria")
-            .select(`id,tarea_id,empleado_id,anulada_en,empleados(id,nombre,rol),tareas_rutina(id,seccion,descripcion,orden,rutinas(id,titulo${ROUTINE_COLORS_ENABLED ? ",color" : ""}))`)
+            .select(`id,tarea_id,empleado_id,anulada_en,empleados(id,nombre,rol),tareas_rutina(id,seccion,descripcion,orden,rutinas(id,titulo,orden${ROUTINE_COLORS_ENABLED ? ",color" : ""}))`)
             .eq("fecha", date), controller.signal),
           readPages(() => supabase.from("tareas_urgentes")
             .select("id,fecha,empleado_id,descripcion,completada,cancelada_en,empleados(id,nombre,rol)")
             .eq("fecha", date), controller.signal),
           readPages(() => supabase.from("asignaciones_diarias")
-            .select(`id,empleado_id,rutina_id,fecha,cancelada_en,tarea_ids,empleados(id,nombre),rutinas(id,titulo${ROUTINE_COLORS_ENABLED ? ",color" : ""},tareas_rutina(id,seccion,descripcion,orden))`)
+            .select(`id,empleado_id,rutina_id,fecha,cancelada_en,tarea_ids,empleados(id,nombre),rutinas(id,titulo,orden${ROUTINE_COLORS_ENABLED ? ",color" : ""},tareas_rutina(id,seccion,descripcion,orden))`)
             .eq("fecha", date), controller.signal),
         ]);
         const failed = results.filter((result) => result.status === "rejected").length;

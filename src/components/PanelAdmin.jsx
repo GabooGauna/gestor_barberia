@@ -7,6 +7,8 @@ import EnviarTareaUrgente from "./EnviarTareaUrgente";
 import { runAdminUserAction } from "../services/adminUsers";
 import { passwordValidationError } from "../utils/auth";
 import { useAuth } from "../hooks/useAuth";
+import SortableList from "./SortableList";
+import { compareTemplateOrder } from "../utils/templateOrder";
 import {
   DEFAULT_ROUTINE_COLOR,
   ROUTINE_COLORS_ENABLED,
@@ -60,6 +62,9 @@ export default function PanelAdmin() {
   const [cargandoEmpleados, setCargandoEmpleados] = useState(true);
   const [accionPendiente, setAccionPendiente] = useState("");
   const [mensajeRutinas, setMensajeRutinas] = useState("");
+  const [arrastrando, setArrastrando] = useState(false);
+  const ordenPendiente = useRef(false);
+  const plantillasOcupadas = Boolean(accionPendiente) || arrastrando;
 
   // Estados para listar y administrar empleados existentes
   const [empleados, setEmpleados] = useState([]);
@@ -99,6 +104,7 @@ export default function PanelAdmin() {
         ? `
           id,
           titulo,
+          orden,
           color,
           tareas_rutina (
             id,
@@ -110,6 +116,7 @@ export default function PanelAdmin() {
         : `
           id,
           titulo,
+          orden,
           tareas_rutina (
             id,
             seccion,
@@ -122,11 +129,13 @@ export default function PanelAdmin() {
         .select(selection)
         .is("archivada_en", null)
         .is("tareas_rutina.archivada_en", null)
-        .order("titulo", { ascending: true });
+        .order("orden", { ascending: true, nullsFirst: false })
+        .order("titulo", { ascending: true }).order("id");
 
       if (error) throw error;
-      const rutinasNormalizadas = (data || []).map((rutina) => ({
+      const rutinasNormalizadas = (data || []).sort(compareTemplateOrder).map((rutina) => ({
         ...rutina,
+        tareas_rutina: [...(rutina.tareas_rutina || [])].sort(compareTemplateOrder),
         color: ROUTINE_COLORS_ENABLED
           ? normalizeRoutineColor(rutina.color)
           : DEFAULT_ROUTINE_COLOR,
@@ -144,6 +153,34 @@ export default function PanelAdmin() {
       return [];
     } finally {
       if (mostrarCarga) setCargandoRutinas(false);
+    }
+  };
+
+  const guardarOrden = async (items, rutinaId = null) => {
+    if (ordenPendiente.current || accionPendiente) return;
+    ordenPendiente.current = true;
+    const anteriores = rutinas;
+    const seleccionAnterior = rutinaSeleccionada;
+    const ordenados = items.map((item, index) => ({ ...item, orden: index + 1 }));
+    const siguientes = rutinaId
+      ? rutinas.map((rutina) => rutina.id === rutinaId ? { ...rutina, tareas_rutina: ordenados } : rutina)
+      : ordenados;
+    setRutinas(siguientes);
+    setRutinaSeleccionada(siguientes.find(({ id }) => id === rutinaSeleccionada?.id) || null);
+    setAccionPendiente("guardar-orden");
+    setMensajeRutinas("Guardando orden…");
+    try {
+      const { error } = await supabase.rpc("reorder_template_items", { p_ids: items.map(({ id }) => id), p_rutina_id: rutinaId })
+        .abortSignal(AbortSignal.timeout(15000));
+      if (error) throw error;
+      setMensajeRutinas("Orden guardado.");
+    } catch {
+      setRutinas(anteriores);
+      setRutinaSeleccionada(seleccionAnterior);
+      setMensajeRutinas("No se pudo confirmar el guardado. Restauramos el orden anterior en pantalla. Recargá para comprobar el orden guardado y volvé a intentarlo.");
+    } finally {
+      ordenPendiente.current = false;
+      setAccionPendiente("");
     }
   };
 
@@ -190,6 +227,7 @@ export default function PanelAdmin() {
 
   const crearRutina = async (e) => {
     e.preventDefault();
+    if (plantillasOcupadas) return;
     if (!nuevoTitulo.trim()) return;
 
     try {
@@ -217,6 +255,7 @@ export default function PanelAdmin() {
 
   const archivarRutina = async (rutinaId, e) => {
     e.stopPropagation();
+    if (plantillasOcupadas) return;
     if (
       !confirm(
         "¿Archivar esta rutina? Dejará de estar disponible, pero su historial se conservará.",
@@ -225,6 +264,7 @@ export default function PanelAdmin() {
       return;
 
     try {
+      setAccionPendiente("archivar-rutina");
       const { error } = await supabase
         .from("rutinas")
         .update({ archivada_en: new Date().toISOString() })
@@ -240,17 +280,20 @@ export default function PanelAdmin() {
     } catch (err) {
       console.error("Error al archivar la rutina:", err);
       alert("No se pudo archivar la rutina.");
+    } finally {
+      setAccionPendiente("");
     }
   };
 
   const agregarTarea = async (e) => {
     e.preventDefault();
+    if (plantillasOcupadas) return;
     if (!nuevaSeccion.trim() || !nuevaDescripcion.trim() || !rutinaSeleccionada)
       return;
 
     try {
       setAccionPendiente("agregar-tarea");
-      const ordenSiguiente = rutinaSeleccionada.tareas_rutina.length + 1;
+      const ordenSiguiente = Math.max(0, ...rutinaSeleccionada.tareas_rutina.map((tarea) => tarea.orden || 0)) + 1;
 
       const { error } = await supabase.from("tareas_rutina").insert([
         {
@@ -279,9 +322,11 @@ export default function PanelAdmin() {
   };
 
   const archivarTarea = async (tareaId) => {
+    if (plantillasOcupadas) return;
     if (!confirm("¿Archivar esta tarea? Su historial se conservará.")) return;
 
     try {
+      setAccionPendiente("archivar-tarea");
       const { error } = await supabase
         .from("tareas_rutina")
         .update({ archivada_en: new Date().toISOString() })
@@ -296,10 +341,13 @@ export default function PanelAdmin() {
     } catch (err) {
       console.error("Error al archivar la tarea:", err);
       alert("No se pudo archivar la tarea.");
+    } finally {
+      setAccionPendiente("");
     }
   };
 
   const actualizarColorRutina = async (color) => {
+    if (plantillasOcupadas) return;
     if (!ROUTINE_COLORS_ENABLED || !rutinaSeleccionada) return;
 
     const colorNormalizado = normalizeRoutineColor(color);
@@ -391,6 +439,7 @@ export default function PanelAdmin() {
           <button
             key={id}
             type="button"
+            disabled={plantillasOcupadas}
             onClick={() => setVistaActiva(id)}
             aria-current={vistaActiva === id ? "page" : undefined}
             className="section-nav__item"
@@ -433,7 +482,7 @@ export default function PanelAdmin() {
                 </div>
                 <button
                   type="submit"
-                  disabled={accionPendiente === "crear-rutina" || !nuevoTitulo.trim()}
+                  disabled={plantillasOcupadas || !nuevoTitulo.trim()}
                   className="button button--primary self-end px-6"
                 >
                   {accionPendiente === "crear-rutina" ? "Creando rutina…" : "Crear rutina"}
@@ -444,12 +493,12 @@ export default function PanelAdmin() {
                   name="new-routine-color"
                   value={nuevoColor}
                   onChange={setNuevoColor}
-                  disabled={accionPendiente === "crear-rutina"}
+                  disabled={plantillasOcupadas}
                 />
               )}
             </form>
             {mensajeRutinas && (
-              <p className="mt-3 text-sm text-gray-600" role="status">
+              <p className="mt-3 text-sm text-gray-600" role={mensajeRutinas.startsWith("No se") ? "alert" : "status"}>
                 {mensajeRutinas}
               </p>
             )}
@@ -460,6 +509,7 @@ export default function PanelAdmin() {
               <h3 className="text-lg font-bold text-gray-800 mb-4">
                 Rutinas registradas
               </h3>
+              <p className="text-xs text-gray-500 mb-3">Arrastrá desde ⋮⋮ para ordenar. Con teclado: espacio, flechas y espacio para soltar; Escape para cancelar.</p>
               <div className="space-y-2">
                 {cargandoRutinas && (
                   <div className="loading-state py-4" role="status" aria-live="polite">
@@ -472,7 +522,8 @@ export default function PanelAdmin() {
                     Todavía no hay rutinas. Crea la primera para comenzar.
                   </p>
                 )}
-                {!cargandoRutinas && rutinas.map((rutina) => (
+                {!cargandoRutinas && <SortableList items={rutinas} label="Orden de rutinas" itemLabel={(rutina) => rutina.titulo}
+                  disabled={Boolean(accionPendiente)} onDraggingChange={setArrastrando} onReorder={(items) => guardarOrden(items)}>{(rutina) => (
                   <div
                     key={rutina.id}
                     className={`routine-choice ${routineColorClass(rutina.color)} rounded-lg border flex justify-between items-center ${
@@ -483,6 +534,7 @@ export default function PanelAdmin() {
                   >
                     <button
                       type="button"
+                      disabled={plantillasOcupadas}
                       onClick={() => setRutinaSeleccionada(rutina)}
                       aria-pressed={rutinaSeleccionada?.id === rutina.id}
                       className="flex-1 p-4 text-left"
@@ -495,6 +547,7 @@ export default function PanelAdmin() {
                         {rutina.tareas_rutina?.length || 0} tareas
                       </span>
                       <button
+                        disabled={plantillasOcupadas}
                         onClick={(e) => archivarRutina(rutina.id, e)}
                         className="text-red-400 hover:text-red-600 font-bold p-3 transition-colors"
                         aria-label={`Archivar rutina ${rutina.titulo}`}
@@ -503,7 +556,7 @@ export default function PanelAdmin() {
                       </button>
                     </div>
                   </div>
-                ))}
+                )}</SortableList>}
               </div>
             </div>
 
@@ -523,7 +576,7 @@ export default function PanelAdmin() {
                         name={`routine-color-${rutinaSeleccionada.id}`}
                         value={normalizeRoutineColor(rutinaSeleccionada.color)}
                         onChange={actualizarColorRutina}
-                        disabled={accionPendiente === "actualizar-color"}
+                        disabled={plantillasOcupadas}
                       />
                       <p className="mt-2 text-xs text-gray-500" aria-live="polite">
                         {accionPendiente === "actualizar-color"
@@ -561,7 +614,7 @@ export default function PanelAdmin() {
                     </div>
                     <button
                       type="submit"
-                      disabled={accionPendiente === "agregar-tarea" || !nuevaSeccion.trim() || !nuevaDescripcion.trim()}
+                      disabled={plantillasOcupadas || !nuevaSeccion.trim() || !nuevaDescripcion.trim()}
                       className="button button--neutral w-full text-sm"
                     >
                       {accionPendiente === "agregar-tarea" ? "Agregando tarea…" : "+ Agregar tarea"}
@@ -574,9 +627,10 @@ export default function PanelAdmin() {
                     </h4>
                     {rutinaSeleccionada.tareas_rutina &&
                     rutinaSeleccionada.tareas_rutina.length > 0 ? (
-                      [...rutinaSeleccionada.tareas_rutina]
-                        .sort((a, b) => a.orden - b.orden)
-                        .map((t) => (
+                      <SortableList key={rutinaSeleccionada.id} items={rutinaSeleccionada.tareas_rutina}
+                        label="Orden de pasos" itemLabel={(tarea) => tarea.descripcion}
+                        disabled={Boolean(accionPendiente)} onDraggingChange={setArrastrando}
+                        onReorder={(items) => guardarOrden(items, rutinaSeleccionada.id)}>{(t) => (
                           <div
                             key={t.id}
                             className="text-sm p-3 bg-white border rounded flex justify-between items-center shadow-sm"
@@ -590,6 +644,7 @@ export default function PanelAdmin() {
                               </span>
                             </div>
                             <button
+                              disabled={plantillasOcupadas}
                               onClick={() => archivarTarea(t.id)}
                               className="text-red-400 hover:text-red-600 font-bold p-1 transition-colors"
                               title="Archivar tarea"
@@ -598,7 +653,7 @@ export default function PanelAdmin() {
                               ✕
                             </button>
                           </div>
-                        ))
+                        )}</SortableList>
                     ) : (
                       <p className="text-xs text-gray-400 italic">
                         No hay tareas cargadas en esta rutina aún.

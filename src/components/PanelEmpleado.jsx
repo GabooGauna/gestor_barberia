@@ -1,6 +1,7 @@
 // src/components/PanelEmpleado.jsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../services/supabase";
+import { compareTemplateOrder } from "../utils/templateOrder";
 import { obtenerColorSeccion } from "../utils/coloresSeccion";
 import {
   DEFAULT_ROUTINE_COLOR,
@@ -43,14 +44,15 @@ export default function PanelEmpleado({ usuario, titulo = "Mis Protocolos Asigna
 
       if (idsRutinas.length > 0) {
         const selection = ROUTINE_COLORS_ENABLED
-          ? "id, titulo, color, tareas_rutina (id, seccion, descripcion, orden)"
-          : "id, titulo, tareas_rutina (id, seccion, descripcion, orden)";
+          ? "id, titulo, orden, color, tareas_rutina (id, seccion, descripcion, orden)"
+          : "id, titulo, orden, tareas_rutina (id, seccion, descripcion, orden)";
         const { data: datosRutinas, error: errRutinas } = await supabase
           .from("rutinas")
           .select(selection)
           .in("id", idsRutinas)
           .is("archivada_en", null)
-          .is("tareas_rutina.archivada_en", null);
+          .is("tareas_rutina.archivada_en", null)
+          .order("orden", { nullsFirst: false }).order("titulo").order("id");
 
         if (errRutinas) throw errRutinas;
         nuevasRutinas = (datosRutinas || []).map((rutina) => ({
@@ -260,7 +262,7 @@ export default function PanelEmpleado({ usuario, titulo = "Mis Protocolos Asigna
             <div className="p-6 space-y-4">
               {rutina.tareas_rutina && rutina.tareas_rutina.length > 0 ? (
                 rutina.tareas_rutina
-                  .sort((a, b) => a.orden - b.orden)
+                  .sort(compareTemplateOrder)
                   .map((tarea) => {
                     const estaLista = completadasHoy[tarea.id];
                     // Obtenemos el color pastel asignado a esta sección

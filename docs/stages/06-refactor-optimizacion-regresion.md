@@ -29,6 +29,18 @@ independiente en `docs/reviews/stage-06-review.md`.
 
 ## Alcance
 
+### Ampliación puntual autorizada — orden de plantillas (24/10/2026)
+
+El propietario solicita arrastre por asa y teclado de rutinas y sus pasos,
+persistencia automática en Supabase y recuperación visual ante error. Se permite
+únicamente `rutinas.orden` como dato nuevo; se reutiliza `tareas_rutina.orden` y
+una RPC atómica con la autorización administrativa vigente. No se mueven tareas
+entre rutinas ni se alteran UUID, colores, históricos, cumplimiento o permisos.
+Las lecturas de plantillas, asignaciones, trabajo y auditoría respetan el orden.
+Se autoriza la persistencia mínima necesaria y commit/push para Vercel después
+de validación local aislada y revisión independiente. Evidencia y handoffs en
+`docs/reviews/template-ordering.md`.
+
 ### Ampliación puntual autorizada — administradores con tareas (20/10/2026)
 
 El propietario autoriza incorporar «Mis tareas» al panel administrativo,

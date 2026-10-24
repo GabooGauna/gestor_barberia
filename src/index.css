@@ -1,5 +1,32 @@
 @import "tailwindcss";
 
+.sortable-list { display: grid; gap: 0.5rem; }
+.sortable-row { position: relative; display: flex; align-items: stretch; min-width: 0; border-radius: var(--radius-sm); }
+.sortable-row__content { flex: 1; min-width: 0; }
+.sortable-row__content > div { height: 100%; }
+.sortable-row__content .routine-choice > button:first-child { min-width: 0; overflow-wrap: anywhere; }
+.sortable-row__content .routine-choice > div { flex-shrink: 0; }
+.drag-handle {
+  flex: 0 0 2.75rem; min-height: 2.75rem; align-self: stretch;
+  display: grid; place-items: center; border-radius: var(--radius-sm);
+  color: var(--ink-muted); background: var(--surface-2); border: 1px solid var(--line);
+  margin-right: 0.375rem; cursor: grab; touch-action: none; user-select: none;
+  font-size: 1.25rem; letter-spacing: -0.2rem; padding-right: 0.2rem;
+}
+.drag-handle:hover { color: var(--accent-strong); border-color: var(--accent); }
+.drag-handle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.drag-handle[aria-disabled="true"] { cursor: wait; opacity: 0.5; }
+.sortable-row.is-dragging { z-index: 3; background: var(--accent-soft); box-shadow: var(--shadow-2); outline: 2px solid var(--accent); }
+.sortable-row.is-dragging .drag-handle { cursor: grabbing; }
+.sortable-row.is-drop-target::after {
+  content: ""; position: absolute; inset: -4px 0 auto; height: 3px;
+  border-radius: 2px; background: var(--accent-strong); pointer-events: none;
+}
+.sortable-row.is-drop-target[data-drop-position="after"]::after { top: auto; bottom: -4px; }
+@media (prefers-reduced-motion: reduce) {
+  .sortable-row { transition: none !important; }
+}
+
 /* Animate hover independently: theme changes switch fill and ink together. */
 @property --button-hover {
   syntax: "<percentage>";

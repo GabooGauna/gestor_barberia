@@ -40,6 +40,9 @@ Convertir el prototipo en una herramienta segura y profesional para organizar ru
 - Administrar plantillas, tareas, integrantes, asignaciones y urgencias.
 - Evitar manipular credenciales desde tablas públicas.
 - Evitar asignaciones duplicadas.
+- Administradores reordenan rutinas y pasos por asa o teclado; el orden se guarda
+  automáticamente y se comparte entre dispositivos y vistas de trabajo, con
+  recuperación visual y mensaje claro si no puede confirmarse el guardado.
 - Explicar impacto de acciones destructivas y aplicar conservación aprobada.
 - Permitir autoasignación administrativa sin otra cuenta ni cambio de rol.
 - Ofrecer «Mis tareas» en administración con trabajo vigente de hoy, cumplimiento

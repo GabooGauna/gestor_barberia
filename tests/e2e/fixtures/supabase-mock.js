@@ -142,6 +142,27 @@ class SupabaseMock {
       const result = profile?.activo ? [{ id: profile.id, nombre: profile.nombre, usuario: profile.usuario, rol: profile.rol, activo: true }] : [];
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(result) }); return;
     }
+    // Atomic isolated analogue of the reorder RPC; SQL authorization is tested separately.
+    if (rpc === "reorder_template_items") {
+      const actor = this.users.get(authUserId)?.profile;
+      if (!actor?.activo || actor.rol !== "admin") {
+        await route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ message: "admin_required" }) }); return;
+      }
+      const routines = this.tables.get("rutinas") || [];
+      const routine = routines.find(({ id, archivada_en }) => id === body.p_rutina_id && archivada_en == null);
+      const rows = body.p_rutina_id ? routine?.tareas_rutina || [] : routines;
+      const active = rows.filter((row) => row.archivada_en == null);
+      const ids = body.p_ids;
+      if ((body.p_rutina_id && !routine) || !Array.isArray(ids) || ids.length !== active.length || new Set(ids).size !== ids.length || ids.some((id) => !active.some((row) => row.id === id))) {
+        await route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ message: "template_set_changed" }) }); return;
+      }
+      const positions = new Map(ids.map((id, index) => [id, index + 1]));
+      rows.forEach((row) => { if (positions.has(row.id)) row.orden = positions.get(row.id); });
+      if (body.p_rutina_id) (this.tables.get("tareas_rutina") || []).forEach((row) => {
+        if (row.rutina_id === body.p_rutina_id && positions.has(row.id)) row.orden = positions.get(row.id);
+      });
+      await route.fulfill({ status: 200, contentType: "application/json", body: "null" }); return;
+    }
     if (rpc === "set_daily_routine_assignment") {
       const current = this.tables.get("asignaciones_diarias") || [];
       const existing = current.find((row) => row.empleado_id === body.p_empleado_id && row.rutina_id === body.p_rutina_id && row.fecha === body.p_fecha);
@@ -253,8 +274,20 @@ class SupabaseMock {
     });
     const order = url.searchParams.get("order");
     if (order) {
-      const [column, direction] = order.split(".");
-      rows = [...rows].sort((a, b) => String(a[column]).localeCompare(String(b[column])) * (direction === "desc" ? -1 : 1));
+      const clauses = order.split(",").map((clause) => clause.split("."));
+      rows = [...rows].sort((a, b) => {
+        for (const [column, direction, nulls] of clauses) {
+          const left = a[column]; const right = b[column];
+          if (left == null && right == null) continue;
+          if (left == null || right == null) {
+            const nullsFirst = nulls === "nullsfirst" || (nulls !== "nullslast" && direction === "desc");
+            return left == null ? (nullsFirst ? -1 : 1) : (nullsFirst ? 1 : -1);
+          }
+          const comparison = typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right));
+          if (comparison) return comparison * (direction === "desc" ? -1 : 1);
+        }
+        return 0;
+      });
     }
     const total = rows.length;
     const offset = Number(url.searchParams.get("offset") || 0);
