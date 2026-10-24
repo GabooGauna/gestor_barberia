@@ -44,7 +44,6 @@ export default function Login() {
       <div className="login-frame">
         <section className="login-intro" aria-labelledby="login-title">
           <BrandLogo className="brand-logo--login" />
-          <p className="context-label">Operación diaria</p>
           <h1 id="login-title">La jornada, en orden.</h1>
           <p>Rutinas, responsables y avances en un solo lugar de trabajo.</p>
           <ThemeSelector />

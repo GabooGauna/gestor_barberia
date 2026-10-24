@@ -460,8 +460,8 @@ export default function PanelAdmin() {
 
       {/* VISTA 1: Creador de Plantillas */}
       {vistaActiva === "plantillas" && (
-        <div className="space-y-6">
-          <div className="surface-panel p-6">
+        <div className="template-workspace space-y-6">
+          <div className="template-create surface-panel p-6">
             <h2 className="text-xl font-bold text-gray-800 mb-4">
               Creador de Plantillas (SOP)
             </h2>
@@ -504,7 +504,7 @@ export default function PanelAdmin() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="template-columns">
             <div className="surface-panel p-6">
               <h3 className="text-lg font-bold text-gray-800 mb-4">
                 Rutinas registradas

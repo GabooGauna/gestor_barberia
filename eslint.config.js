@@ -5,7 +5,8 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'playwright-report', 'test-results', 'blob-report']),
+  // Installed skills are third-party tooling, not application source.
+  globalIgnores(['dist', 'playwright-report', 'test-results', 'blob-report', '.agents/skills/**']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [

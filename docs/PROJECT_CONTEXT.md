@@ -2,6 +2,12 @@
 
 ## Etapa 6 vigente — 20 de octubre de 2026
 
+Refactor visual autorizado del 24 de octubre: fuentes locales DM Sans y DM Serif
+Display, navegación lateral unificada, superficies mates y tema claro cálido;
+se preservan logo, grafito/cobre, oscuro y todos los contratos. Sin cambios de
+Supabase ni datos. Dirección en `DESIGN.md`; validación y estado de publicación
+en `docs/reviews/gns-visual-refactor.md`.
+
 Ampliación autorizada del 24 de octubre: reordenamiento de Plantillas por asa y
 teclado, con `rutinas.orden` nullable y `tareas_rutina.orden` existente; RPC
 atómica `reorder_template_items(uuid[],uuid)` con autorización administrativa

@@ -177,8 +177,8 @@ export default function PanelEmpleado({ usuario, titulo = "Mis Protocolos Asigna
   }
 
   return (
-    <div className="space-y-6">
-      <div className="surface-panel p-6">
+    <div className="employee-workspace space-y-6">
+      <div className="employee-heading surface-panel p-6">
         <h2 className="text-xl font-bold text-gray-800 mb-1">
           {titulo}
         </h2>
@@ -190,9 +190,8 @@ export default function PanelEmpleado({ usuario, titulo = "Mis Protocolos Asigna
 
       {/* SECCIÓN DE TAREAS URGENTES (Destacadas en color ámbar/naranja) */}
       {tareasUrgentes.length > 0 && (
-        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl shadow-md overflow-hidden p-6 space-y-4">
+        <div className="urgent-tasks bg-amber-50 border border-amber-300 rounded-2xl overflow-hidden p-6 space-y-4">
           <div className="flex items-center gap-2 border-b border-amber-200 pb-3">
-            <span className="text-xl">🚨</span>
             <h3 className="font-bold text-amber-900 text-lg">
               Avisos y Tareas Urgentes del Administrador
             </h3>
@@ -215,7 +214,7 @@ export default function PanelEmpleado({ usuario, titulo = "Mis Protocolos Asigna
                 >
                   <div className="pr-4">
                     <span className="text-[10px] font-bold uppercase tracking-wider block text-amber-600 mb-1">
-                      ⚠️ Indicación Extraordinaria
+                      Indicación Extraordinaria
                     </span>
                     <p
                       className={`font-semibold ${estaLista ? "line-through text-green-700" : ""}`}
@@ -251,7 +250,7 @@ export default function PanelEmpleado({ usuario, titulo = "Mis Protocolos Asigna
             key={rutina.id}
             className={`surface-panel ${routineColorClass(rutina.color)} overflow-hidden`}
           >
-            <div className="bg-gray-800 text-white px-6 py-3 font-semibold text-lg flex items-center gap-3">
+            <div className="routine-heading px-6 py-4 font-semibold text-lg flex items-center gap-3">
               <span
                 className={`routine-color-dot routine-accent--${normalizeRoutineColor(rutina.color)}`}
                 aria-hidden="true"

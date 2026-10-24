@@ -29,6 +29,14 @@ independiente en `docs/reviews/stage-06-review.md`.
 
 ## Alcance
 
+### Ampliación visual autorizada — GNS (24/10/2026)
+
+El propietario autoriza refactor visual integral con Impeccable y commit/push
+para Vercel. Conserva logo, cobre/grafito, ambos temas, funcionalidades y datos.
+Sólo presentación, tipografía local, navegación y estados; sin Supabase/RLS.
+La reanudación conserva las validaciones aprobadas y corrige sólo defectos
+detectados. Evidencia acotada: `docs/reviews/gns-visual-refactor.md`.
+
 ### Ampliación puntual autorizada — orden de plantillas (24/10/2026)
 
 El propietario solicita arrastre por asa y teclado de rutinas y sus pasos,

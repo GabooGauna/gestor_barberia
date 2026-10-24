@@ -18,16 +18,15 @@ export default function Panel() {
       </div>
       <aside className="app-rail" aria-label="Contexto de la aplicación">
         <BrandLogo className="brand-logo--rail" />
-        <div className="rail-guide" aria-hidden="true" />
       </aside>
       <div className="app-workspace">
         {/* Cabecera común para ambos roles */}
         <header className="workspace-header">
           <div>
-            <p className="context-label">Jornada en curso</p>
             <h1>
               Mesa de trabajo
             </h1>
+            <p className="context-label">Jornada en curso</p>
           </div>
           <UserActionsMenu usuario={usuario} onLogout={signOut} />
         </header>

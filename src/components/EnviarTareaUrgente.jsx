@@ -66,7 +66,7 @@ export default function EnviarTareaUrgente() {
     <div className="surface-panel p-6 space-y-4">
       <div>
         <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-          <span>🚨</span> Enviar Tarea Urgente / Ad-Hoc
+          Enviar Tarea Urgente / Ad-Hoc
         </h3>
         <p className="text-xs text-gray-500 mt-1">
           Asigna una indicación extraordinaria fuera de la rutina para un

@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-24T19:41:49.078Z",
+  "title": "Design System: GNS Hair Studio",
+  "extensions": {
+    "shadows": [
+      {
+        "name": "shadow-1",
+        "value": "none",
+        "purpose": "Superficies ordinarias."
+      },
+      {
+        "name": "shadow-2-light",
+        "value": "0 20px 58px rgb(19 31 41 / 16%)",
+        "purpose": "Menús y arrastre en claro."
+      },
+      {
+        "name": "shadow-2-dark",
+        "value": "0 24px 64px rgb(0 0 0 / 42%)",
+        "purpose": "Menús y arrastre en oscuro."
+      }
+    ],
+    "motion": [
+      {
+        "name": "duration-fast",
+        "value": "180ms",
+        "purpose": "Respuesta de controles."
+      },
+      {
+        "name": "duration-enter",
+        "value": "200ms",
+        "purpose": "Entrada de contenido."
+      },
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.2, 0.65, 0.3, 1)",
+        "purpose": "Transición estándar."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "team",
+        "value": "1200px"
+      },
+      {
+        "name": "audit",
+        "value": "1100px"
+      },
+      {
+        "name": "navigation",
+        "value": "820px"
+      },
+      {
+        "name": "login",
+        "value": "680px"
+      },
+      {
+        "name": "compact",
+        "value": "480px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primario",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Variante implementada del control operativo.",
+      "html": "<button class=\"ds-button ds-primary\">Primario</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;min-height:2.75rem;padding:.65rem 1rem;border:1px solid transparent;border-radius:var(--radius-sm,.375rem);font:600 .875rem \"DM Sans\",sans-serif;cursor:pointer;transition:background 180ms,box-shadow 180ms,transform 180ms}.ds-button:focus-visible,.ds-input:focus-visible,.ds-nav:focus-visible{outline:3px solid var(--focus,#875126);outline-offset:3px}.ds-button:active:not(:disabled){transform:translateY(1px)}.ds-button:disabled{opacity:.62;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-primary{background:var(--action-primary,#875126);color:var(--action-primary-ink,#fff);}.ds-primary:hover:not(:disabled){background:var(--action-primary-hover,#70411d);box-shadow:var(--shadow-control-hover,none)}"
+    },
+    {
+      "name": "Secundario",
+      "kind": "button",
+      "description": "Variante implementada del control operativo.",
+      "html": "<button class=\"ds-button ds-secondary\">Secundario</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;min-height:2.75rem;padding:.65rem 1rem;border:1px solid transparent;border-radius:var(--radius-sm,.375rem);font:600 .875rem \"DM Sans\",sans-serif;cursor:pointer;transition:background 180ms,box-shadow 180ms,transform 180ms}.ds-button:focus-visible,.ds-input:focus-visible,.ds-nav:focus-visible{outline:3px solid var(--focus,#875126);outline-offset:3px}.ds-button:active:not(:disabled){transform:translateY(1px)}.ds-button:disabled{opacity:.62;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-secondary{background:var(--surface-2,#ede9e3);color:var(--ink,#292724);border-color:var(--line-strong,#a69a8d);}.ds-secondary:hover:not(:disabled){background:var(--accent-soft,#f4e8dc);box-shadow:var(--shadow-control-hover,none)}"
+    },
+    {
+      "name": "Neutro",
+      "kind": "button",
+      "description": "Variante implementada del control operativo.",
+      "html": "<button class=\"ds-button ds-neutral\">Neutro</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;min-height:2.75rem;padding:.65rem 1rem;border:1px solid transparent;border-radius:var(--radius-sm,.375rem);font:600 .875rem \"DM Sans\",sans-serif;cursor:pointer;transition:background 180ms,box-shadow 180ms,transform 180ms}.ds-button:focus-visible,.ds-input:focus-visible,.ds-nav:focus-visible{outline:3px solid var(--focus,#875126);outline-offset:3px}.ds-button:active:not(:disabled){transform:translateY(1px)}.ds-button:disabled{opacity:.62;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-neutral{background:var(--nav,#17191b);color:#f0f3f6;}.ds-neutral:hover:not(:disabled){background:var(--nav-hover,#303234);box-shadow:var(--shadow-control-hover,none)}"
+    },
+    {
+      "name": "Advertencia",
+      "kind": "button",
+      "description": "Variante implementada del control operativo.",
+      "html": "<button class=\"ds-button ds-warning\">Advertencia</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;min-height:2.75rem;padding:.65rem 1rem;border:1px solid transparent;border-radius:var(--radius-sm,.375rem);font:600 .875rem \"DM Sans\",sans-serif;cursor:pointer;transition:background 180ms,box-shadow 180ms,transform 180ms}.ds-button:focus-visible,.ds-input:focus-visible,.ds-nav:focus-visible{outline:3px solid var(--focus,#875126);outline-offset:3px}.ds-button:active:not(:disabled){transform:translateY(1px)}.ds-button:disabled{opacity:.62;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-warning{background:var(--warning,#87560f);color:var(--warning-on-solid,#fff);}.ds-warning:hover:not(:disabled){background:var(--warning-hover,#6c4209);box-shadow:var(--shadow-control-hover,none)}"
+    },
+    {
+      "name": "Destructivo",
+      "kind": "button",
+      "description": "Variante implementada del control operativo.",
+      "html": "<button class=\"ds-button ds-danger\">Destructivo</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;min-height:2.75rem;padding:.65rem 1rem;border:1px solid transparent;border-radius:var(--radius-sm,.375rem);font:600 .875rem \"DM Sans\",sans-serif;cursor:pointer;transition:background 180ms,box-shadow 180ms,transform 180ms}.ds-button:focus-visible,.ds-input:focus-visible,.ds-nav:focus-visible{outline:3px solid var(--focus,#875126);outline-offset:3px}.ds-button:active:not(:disabled){transform:translateY(1px)}.ds-button:disabled{opacity:.62;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-danger{background:var(--danger-soft,#fae3e3);color:var(--danger,#a93737);border-color:color-mix(in srgb,var(--danger,#a93737) 50%,transparent);}.ds-danger:hover:not(:disabled){background:color-mix(in srgb,var(--danger-soft,#fae3e3) 85%,var(--danger,#a93737) 15%);box-shadow:var(--shadow-control-hover,none)}"
+    },
+    {
+      "name": "Campo",
+      "kind": "input",
+      "description": "Entrada con etiqueta visible.",
+      "html": "<label class=\"ds-label\">Nombre<input class=\"ds-input\" placeholder=\"Nombre del integrante\"></label>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;min-height:2.75rem;padding:.65rem 1rem;border:1px solid transparent;border-radius:var(--radius-sm,.375rem);font:600 .875rem \"DM Sans\",sans-serif;cursor:pointer;transition:background 180ms,box-shadow 180ms,transform 180ms}.ds-button:focus-visible,.ds-input:focus-visible,.ds-nav:focus-visible{outline:3px solid var(--focus,#875126);outline-offset:3px}.ds-button:active:not(:disabled){transform:translateY(1px)}.ds-button:disabled{opacity:.62;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-label{display:grid;gap:.5rem;font:1rem \"DM Sans\",sans-serif;color:var(--ink,#292724)}.ds-input{min-height:3rem;padding:.65rem .8rem;border:1px solid var(--line,#d8d1c8);border-radius:var(--radius-sm,.375rem);background:var(--surface-1,#fffdfa);color:var(--ink,#292724);font:inherit}.ds-input:hover{border-color:var(--line-hover,#8b7a69)}"
+    },
+    {
+      "name": "Navegación",
+      "kind": "nav",
+      "description": "Selección sobre el lateral grafito.",
+      "html": "<nav class=\"ds-rail\"><button class=\"ds-nav\" aria-current=\"page\">Mis tareas</button></nav>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;min-height:2.75rem;padding:.65rem 1rem;border:1px solid transparent;border-radius:var(--radius-sm,.375rem);font:600 .875rem \"DM Sans\",sans-serif;cursor:pointer;transition:background 180ms,box-shadow 180ms,transform 180ms}.ds-button:focus-visible,.ds-input:focus-visible,.ds-nav:focus-visible{outline:3px solid var(--focus,#875126);outline-offset:3px}.ds-button:active:not(:disabled){transform:translateY(1px)}.ds-button:disabled{opacity:.62;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}.ds-rail{background:var(--nav,#17191b);padding:1rem}.ds-nav{min-height:4.25rem;width:100%;padding:.75rem .8rem;border:0;border-radius:var(--radius-sm,.375rem);font:700 1rem \"DM Sans\",sans-serif;text-align:left;background:transparent;color:#c8c4be}.ds-nav:hover{background:#25282b;color:#fffdfa}.ds-nav[aria-current=\"page\"]{background:#352b23;color:#efc39b;box-shadow:inset 0 0 0 1px #76573d}"
+    },
+    {
+      "name": "Etiqueta de sección",
+      "kind": "chip",
+      "description": "Identificador de sección sin acción interactiva.",
+      "html": "<span class=\"ds-chip\">Sección</span>",
+      "css": ".ds-chip{background:var(--surface-3,#e2dcd3);color:var(--ink-muted,#625c55);font-family:\"DM Sans\",sans-serif}"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "description": "Superficie de agrupación, mate y sin sombra.",
+      "html": "<section class=\"ds-panel\"><h3>Trabajo de hoy</h3></section>",
+      "css": ".ds-panel{min-width:0;border:1px solid var(--line,#d8d1c8);border-radius:var(--radius-lg,1rem);background:var(--surface-1,#fffdfa);color:var(--ink,#292724)}.ds-panel h3{font-family:\"DM Sans\",sans-serif;line-height:1.3;letter-spacing:-.02em}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Estudio operativo GNS",
+    "overview": "Modo Operate:una aplicación para trabajar todos los días. La identidad combina\ngrafito y cobre con superficies cálidas, composición precisa y acabado mate.\nEl logo GNS conserva su identidad; la presentación acompaña los contratos de\ntrabajo existentes. Registro del sistema implementado en `src/index.css`, con\nlos compromisos de `PRODUCT.md` y la dirección aprobada del 24/10/2026.",
+    "keyCharacteristics": [
+      "Superficies mates y jerarquía por composición.",
+      "Serif de identidad; sans para operar.",
+      "Temas claro y oscuro con tokens semánticos."
+    ],
+    "rules": [],
+    "dos": [
+      "**Do** conservar logo GNS, fuentes locales y ambos temas.",
+      "**Do** usar tokens semánticos, foco visible y movimiento reducido."
+    ],
+    "donts": [
+      "**Don't** agregar gradientes, transparencias decorativas o glassmorphism.",
+      "**Don't** convertir la interfaz operativa en una landing promocional."
+    ]
+  }
+}
