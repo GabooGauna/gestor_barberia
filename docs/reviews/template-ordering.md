@@ -95,3 +95,19 @@ de prueba remotas. Tester aprueba este seguimiento puntual, sin cerrar otra etap
 `npm audit --json`: dos hallazgos HIGH preexistentes en herramientas Vite 8.3.0 y
 Zod (lockfile sin cambios en esas dependencias). Ninguno corresponde a dnd-kit;
 se registran fuera del alcance funcional y no se actualizan automáticamente.
+
+## Publicación verificada
+
+Commit de implementación `751b4c67b1d59cb16b4d7ad9707ce58908a09df5`, push
+`origin/main` exitoso. Estado GitHub `Vercel: success`, despliegue
+`QheruaTbNcm4iyc7EzYzMAa2vw4y`. HTTP 200 en
+`https://gestor-barberia-five.vercel.app`; bundle servido
+`/assets/index-D-Y-A9nv.js`, administrativo `PanelAdmin-COKkqwMk.js`.
+Lectura pública de assets confirma RPC `reorder_template_items`,
+`data-drop-position`, asas accesibles y mensaje de rollback presentes. No se
+inició sesión ni se reordenaron datos reales para esta comprobación.
+
+Orquestador cierra únicamente este seguimiento: Backend, Tester y Reviewer
+aprobados; persistencia mínima aplicada, frontend publicado y documentación
+sincronizada. Los únicos cambios previos del propietario (`.codex/config.toml`
+y `.env.example`) permanecen fuera de los commits y se conservan.
