@@ -509,7 +509,7 @@ export default function PanelAdmin() {
               <h3 className="text-lg font-bold text-gray-800 mb-4">
                 Rutinas registradas
               </h3>
-              <p className="text-xs text-gray-500 mb-3">Arrastrá desde ⋮⋮ para ordenar. Con teclado: espacio, flechas y espacio para soltar; Escape para cancelar.</p>
+              <p className="text-xs text-gray-500 mb-3">Arrastrá la tarjeta o su asa para ordenar. En celular, mantené presionado antes de mover. Con teclado: espacio, flechas y espacio para soltar; Escape para cancelar.</p>
               <div className="space-y-2">
                 {cargandoRutinas && (
                   <div className="loading-state py-4" role="status" aria-live="polite">
@@ -536,6 +536,7 @@ export default function PanelAdmin() {
                       type="button"
                       disabled={plantillasOcupadas}
                       onClick={() => setRutinaSeleccionada(rutina)}
+                      data-sortable-drag-surface
                       aria-pressed={rutinaSeleccionada?.id === rutina.id}
                       className="flex-1 p-4 text-left"
                     >

@@ -1,16 +1,24 @@
 import { useState } from "react";
-import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { closestCenter, DndContext, KeyboardSensor, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 function SortableRow({ item, label, disabled, dropPosition, children }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id, disabled });
+  const startFromCard = (event, listener) => {
+    if (disabled) return;
+    const control = event.target.closest('button, a, input, select, textarea, [contenteditable="true"]');
+    if (control && !control.matches('.drag-handle, [data-sortable-drag-surface]')) return;
+    listener?.(event);
+  };
   return (
     <div ref={setNodeRef} role="listitem" data-sortable-id={item.id} data-drop-position={dropPosition}
+      onMouseDown={(event) => startFromCard(event, listeners?.onMouseDown)}
+      onTouchStart={(event) => startFromCard(event, listeners?.onTouchStart)}
       className={`sortable-row${isDragging ? " is-dragging" : ""}${isOver && !isDragging ? " is-drop-target" : ""}`}
       style={{ transform: CSS.Transform.toString(transform), transition }}>
       <button ref={setActivatorNodeRef} type="button" className="drag-handle"
-        {...attributes} {...(disabled ? {} : listeners)} aria-disabled={disabled} aria-label={`Reordenar ${label}`}
+        {...attributes} onKeyDown={disabled ? undefined : listeners?.onKeyDown} aria-disabled={disabled} aria-label={`Reordenar ${label}`}
         title="Arrastrá para ordenar. Con teclado: espacio, flechas y espacio para soltar; Escape para cancelar.">
         <span aria-hidden="true">⋮⋮</span>
       </button>
@@ -23,7 +31,9 @@ function SortableRow({ item, label, disabled, dropPosition, children }) {
 export default function SortableList({ items, label, itemLabel, disabled, onReorder, onDraggingChange, children }) {
   const [activeId, setActiveId] = useState(null);
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    // A short hold distinguishes reordering from scrolling on touch screens.
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const name = (id) => itemLabel(items.find((item) => item.id === id));

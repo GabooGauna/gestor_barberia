@@ -111,3 +111,19 @@ Orquestador cierra únicamente este seguimiento: Backend, Tester y Reviewer
 aprobados; persistencia mínima aplicada, frontend publicado y documentación
 sincronizada. Los únicos cambios previos del propietario (`.codex/config.toml`
 y `.env.example`) permanecen fuera de los commits y se conservan.
+
+## Seguimiento: arrastre desde tarjeta
+
+Solicitud posterior: integrar el asa y permitir arrastre desde el contenido.
+Mouse activa tras 6px; táctil tras 200ms con tolerancia de 8px, preservando scroll.
+El teclado conserva su asa accesible; archivar no inicia arrastre y el clic
+sigue seleccionando la rutina. Sin cambios de persistencia ni Supabase.
+
+Se detectó que un botón nativo deshabilitado podía consumir mouseup durante
+drag. Una regla CSS sólo durante arrastre evita ese targeting sin retirar
+el bloqueo ni la semántica disabled. Lint y build aprobados; regresión puntual
+en `template-ordering.spec.js`, con datos sintéticos y ambos temas.
+
+Tester: 8/8 escenarios acumulados aprobados (7 iniciales, mouse revalidado tras
+la corrección). Reviewer: `ship`; capturas puntuales desktop y táctil revisadas,
+sin hallazgos pendientes. Commit/push autorizados por el propietario.

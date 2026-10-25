@@ -49,6 +49,10 @@ Se autoriza la persistencia mínima necesaria y commit/push para Vercel después
 de validación local aislada y revisión independiente. Evidencia y handoffs en
 `docs/reviews/template-ordering.md`.
 
+Seguimiento autorizado: asa integrada visualmente en la tarjeta y arrastre desde
+su contenido con mouse o pulsación sostenida táctil. Se conservan selección,
+archivado, teclado y persistencia existente; sin cambios de backend.
+
 ### Ampliación puntual autorizada — administradores con tareas (20/10/2026)
 
 El propietario autoriza incorporar «Mis tareas» al panel administrativo,

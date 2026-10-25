@@ -44,8 +44,8 @@ async function keyboardMove(page, label, key = "ArrowDown") {
   await expect(page.getByText("Orden guardado.", { exact: true })).toBeVisible();
   await expect(handle).toBeFocused();
 }
-async function mouseMove(page, label, targetId) {
-  const handle = page.getByRole("button", { name: `Reordenar ${label}`, exact: true });
+async function mouseMove(page, label, targetId, content = false) {
+  const handle = content ? page.getByText(label, { exact: true }) : page.getByRole("button", { name: `Reordenar ${label}`, exact: true });
   await handle.scrollIntoViewIfNeeded();
   const from = await handle.boundingBox();
   const target = await page.locator(`[data-sortable-id="${targetId}"]`).boundingBox();
@@ -89,23 +89,31 @@ test("teclado guarda rutinas y pasos, conserva identidades y persiste en recarga
   } finally { await context.close(); }
 });
 
-test("mouse usa sólo el asa, indica destino y no mezcla pasos con rutinas", async ({ page, supabaseMock }) => {
+test("mouse arrastra desde contenido y asa, conserva selección y excluye archivar", async ({ page, supabaseMock }, testInfo) => {
   await open(page, supabaseMock);
-  await mouseMove(page, "Apertura", "routine-b");
+  await mouseMove(page, "Apertura", "routine-b", true);
   await expect.poll(() => listIds(page, "Orden de rutinas")).toEqual(["routine-b", "routine-a", "routine-unordered"]);
   await page.getByRole("button", { name: "Apertura", exact: true }).click();
-  await mouseMove(page, "Preparar estación", "task-b");
+  await mouseMove(page, "Preparar estación", "task-b", true);
   await expect.poll(() => listIds(page, "Orden de pasos")).toEqual(["task-b", "task-a", "task-c"]);
   expect(calls(supabaseMock).map(({ body }) => body.p_rutina_id)).toEqual([null, "routine-a"]);
-  const from = await page.getByText("Limpiar herramientas", { exact: true }).boundingBox();
-  await page.mouse.move(from.x + 10, from.y + 5); await page.mouse.down();
-  await page.mouse.move(from.x + 10, from.y + 70, { steps: 8 }); await page.mouse.up();
-  expect(calls(supabaseMock)).toHaveLength(2);
+  await mouseMove(page, "Limpiar herramientas", "task-a");
+  await expect.poll(() => listIds(page, "Orden de pasos")).toEqual(["task-a", "task-b", "task-c"]);
+  for (const label of ["Archivar tarea: Limpiar herramientas", "Archivar rutina Apertura"]) {
+    const from = await page.getByRole("button", { name: label, exact: true }).boundingBox();
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(from.x - 80, from.y + 70, { steps: 8 });
+    await expect(page.locator(".is-dragging")).toHaveCount(0);
+    await page.mouse.up();
+    expect(calls(supabaseMock)).toHaveLength(3);
+  }
   page.once("dialog", (dialog) => dialog.dismiss());
   await page.getByRole("button", { name: "Archivar tarea: Limpiar herramientas", exact: true }).click();
-  expect(calls(supabaseMock)).toHaveLength(2);
+  expect(calls(supabaseMock)).toHaveLength(3);
   await page.getByRole("button", { name: "Cierre", exact: true }).click();
   await expect.poll(() => listIds(page, "Orden de pasos")).toEqual(["task-other"]);
+  await testInfo.attach("integrated-cards-desktop", { body: await page.screenshot(), contentType: "image/png" });
 });
 
 test("Escape y soltar en el mismo lugar no escriben", async ({ page, supabaseMock }) => {
@@ -189,12 +197,13 @@ for (const theme of ["light", "dark"]) {
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     const session = await context.newCDPSession(page);
     await session.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 1 });
-    const handle = page.getByRole("button", { name: "Reordenar Apertura", exact: true });
+    const handle = theme === "light" ? page.getByText("Apertura", { exact: true }) : page.getByRole("button", { name: "Reordenar Apertura", exact: true });
     await page.getByRole("list", { name: "Orden de rutinas", exact: true }).evaluate((element) => element.scrollIntoView({ block: "center" }));
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const from = await handle.boundingBox(); const target = await page.locator('[data-sortable-id="routine-b"]').boundingBox();
     const x = Math.round(from.x + from.width / 2); const y = Math.round(from.y + from.height / 2);
     await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    await page.waitForTimeout(250);
     for (let i = 1; i <= 12; i++) {
       await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: Math.round(y + (target.y + target.height / 2 - y) * i / 12) }] });
       await page.evaluate(() => new Promise(requestAnimationFrame));
@@ -206,6 +215,14 @@ for (const theme of ["light", "dark"]) {
     await expect(page.getByText("Orden guardado.", { exact: true })).toBeVisible();
     await expect.poll(() => listIds(page, "Orden de rutinas")).toEqual(["routine-b", "routine-a", "routine-unordered"]);
     await expect(page.locator('[data-sortable-id="routine-a"] .routine-choice')).toHaveClass(/routine-accent--steel/);
+    const scrollFrom = await page.getByText("Apertura", { exact: true }).boundingBox();
+    const scrollX = Math.round(scrollFrom.x + scrollFrom.width / 2);
+    const scrollY = Math.round(scrollFrom.y + scrollFrom.height / 2);
+    await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: scrollX, y: scrollY }] });
+    await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: scrollX, y: scrollY - 60 }] });
+    await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect(page.locator(".is-dragging")).toHaveCount(0);
+    expect(calls(supabaseMock)).toHaveLength(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(results.violations.filter(({ impact }) => ["critical", "serious"].includes(impact))).toEqual([]);

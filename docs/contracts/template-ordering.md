@@ -23,11 +23,14 @@ concurrentes sobre el mismo conjunto: gana la última operación aceptada.
 
 ## UI y consumidores
 
-dnd-kit core/sortable con asas PointerSensor y KeyboardSensor. Espacio levanta,
+dnd-kit core/sortable con MouseSensor, TouchSensor y KeyboardSensor. Espacio levanta,
 flechas desplazan, espacio guarda, Escape cancela; instrucciones y anuncios en
-español. Contextos independientes impiden mover pasos entre rutinas. Sólo el asa
-captura el gesto, con `touch-action:none`; el resto permite scroll/selección y
-los controles conservan sus acciones. Estilos usan tokens GNS y movimiento
+español. Contextos independientes impiden mover pasos entre rutinas. La tarjeta
+y su asa integrada capturan el arrastre: mouse después de 6px, táctil tras
+200ms de pulsación con tolerancia de 8px para conservar el scroll vertical.
+El asa conserva teclado y `touch-action:none`; la tarjeta usa `pan-y`.
+Los controles de archivado y formularios no inician arrastre; el selector de
+rutina conserva el clic y admite arrastre. Estilos usan tokens GNS y movimiento
 reducido. Mientras se arrastra o guarda se bloquean acciones incompatibles.
 
 Actualización optimista de la lista; error restaura la lista anterior en UI y
